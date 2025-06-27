@@ -4,8 +4,8 @@ setup(
     name="promptlearn",
     version="0.1.0",
     description="Prompt-based estimators like PromptClassifier and PromptRegressor for LLM-driven ML pipelines.",
-    author="Erland Kirkfire",
-    author_email="erland.kirkfire@gmail.com",
+    author="Fredrik Linaker",
+    author_email="fredrik.linaker@gmail.com",
     license="MIT",
     packages=find_packages(),
     install_requires=[

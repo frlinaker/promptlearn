@@ -81,4 +81,4 @@ From **model parameters** to **language-native logic**.
 
 ## 📁 License
 
-MIT © 2025 Erland Kirkfire
+MIT © 2025 Fredrik Linaker
