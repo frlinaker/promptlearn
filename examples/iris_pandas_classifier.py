@@ -16,8 +16,8 @@ logging.basicConfig(level=logging.INFO)
 
 # 1. Load the dataset
 iris = datasets.load_iris()
-X = pd.DataFrame(iris.data, columns=iris.feature_names)
-y = pd.Series(iris.target, name="target")
+X = pd.DataFrame(iris.data, columns=iris.feature_names)  # type: ignore
+y = pd.Series(iris.target, name="species")  # type: ignore
 
 # 2. Split the data into training and testing sets
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
@@ -34,7 +34,7 @@ accuracy = accuracy_score(y_test, y_pred)
 print(f"Accuracy: {accuracy:.2f}")
 
 # Optional: Make a prediction on a new, unseen data point
-new_data_point = pd.DataFrame([[5.1, 3.5, 1.4, 0.2]], columns=iris.feature_names)
+new_data_point = pd.DataFrame([[5.1, 3.5, 1.4, 0.2]], columns=iris.feature_names)  # type: ignore
 prediction = pcl.predict(new_data_point)
-print(f"Prediction for new data point: {iris.target_names[prediction[0]]}")
+print(f"Prediction for new data point: {iris.target_names[prediction[0]]}")  # type: ignore
 print("(The best prediction would be 'setosa' for this input.)")
