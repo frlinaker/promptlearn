@@ -1,62 +1,88 @@
 #!/usr/bin/env python
 
-"""
-Benchmark: Compare PromptClassifier (various LLMs) vs baseline classifiers on a tabular dataset.
-"""
+# example:
+# python examples/benchmark_runner.py --train examples/data/mammal_train.csv --val examples/data/mammal_val.csv --target is_mammal --val_rows 100
 
+import argparse
 import pandas as pd
 import numpy as np
 import time
-from sklearn.datasets import fetch_openml
-from sklearn.model_selection import train_test_split
+import logging
 from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split
 from sklearn.dummy import DummyClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from sklearn.preprocessing import OneHotEncoder
-import logging
 from promptlearn import PromptClassifier
 
 logging.basicConfig(level=logging.INFO)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
-print("📦 Loading Adult dataset...")
-data = fetch_openml("adult", version=2, as_frame=True)
+# Args
+parser = argparse.ArgumentParser(description="Run benchmark with train/val files or OpenML dataset")
+parser.add_argument("--dataset", type=str, help="OpenML dataset name or single CSV/TSV file path")
+parser.add_argument("--target", type=str, required=True, help="Name of the target column")
+parser.add_argument("--train", type=str, help="Path to train CSV/TSV")
+parser.add_argument("--val", type=str, help="Path to val CSV/TSV")
+parser.add_argument("--val_rows", type=int, default=None, help="Cap number of val rows")
+args = parser.parse_args()
 
-# For promptlearn (LLMs): use string format
-X_llm = data.data.astype(str).fillna("unknown")
-y_raw = (data.target == ">50K").astype(int)
+# Load data
+def load_file(path):
+    if path.endswith(".tsv"):
+        return pd.read_csv(path, sep="\t")
+    return pd.read_csv(path)
 
-# For baseline models: one-hot encode
-X_encoded = pd.get_dummies(data.data)
+if args.train and args.val:
+    print("📦 Loading train/val from separate files...")
+    df_train = load_file(args.train)
+    df_val = load_file(args.val)
+    df_full = pd.concat([df_train, df_val], ignore_index=True)  # for consistent encoding
+elif args.dataset:
+    print(f"📦 Loading dataset: {args.dataset}")
+    if args.dataset.endswith(".csv") or args.dataset.endswith(".tsv"):
+        df_full = load_file(args.dataset)
+        df_train, df_val = train_test_split(df_full, test_size=0.3, stratify=df_full[args.target], random_state=42)
+    else:
+        from sklearn.datasets import fetch_openml
+        data = fetch_openml(args.dataset, version=1, as_frame=True)
+        df_full = pd.concat([data.data, data.target.rename(args.target)], axis=1)
+        df_train, df_val = train_test_split(df_full, test_size=0.3, stratify=df_full[args.target], random_state=42)
+else:
+    raise ValueError("Must provide either --dataset or both --train and --val")
 
-print(f"✅ Dataset loaded: {X_llm.shape[0]} rows")
+# Split X/y
+X_train_raw = df_train.drop(columns=[args.target])
+y_train = df_train[args.target]
+X_val_raw = df_val.drop(columns=[args.target])
+y_val = df_val[args.target]
 
-# Split both versions the same way
-print("🔀 Shuffling and splitting...")
-X_train_llm_full, X_val_llm, y_train_full, y_val = train_test_split(
-    X_llm, y_raw, test_size=0.3, stratify=y_raw, random_state=42
-)
+# Normalize target if needed
+if y_train.dtype == "object":
+    y_train = pd.factorize(y_train)[0]
+    y_val = pd.factorize(y_val)[0]
 
-X_train_encoded_full, X_val_encoded, _, _ = train_test_split(
-    X_encoded, y_raw, test_size=0.3, stratify=y_raw, random_state=42
-)
+# Merge for encoding
+X_combined = pd.concat([X_train_raw, X_val_raw], axis=0)
+X_combined_encoded = pd.get_dummies(X_combined)
+X_combined_llm = X_combined.astype(str).fillna("unknown")
 
-# Truncate training set for fairness
-X_train_llm = X_train_llm_full.iloc[:2400]
-X_train_encoded = X_train_encoded_full.iloc[:2400]
-y_train = y_train_full.iloc[:2400]
+# Split encoded
+X_train_encoded = X_combined_encoded.iloc[:len(X_train_raw)]
+X_val_encoded = X_combined_encoded.iloc[len(X_train_raw):]
+X_train_llm = X_combined_llm.iloc[:len(X_train_raw)]
+X_val_llm = X_combined_llm.iloc[len(X_train_raw):]
 
-# Truncate validation set to limit LLM costs
-VAL_ROWS = 200
-X_val_llm = X_val_llm.iloc[:VAL_ROWS]
-X_val_encoded = X_val_encoded.iloc[:VAL_ROWS]
-y_val = y_val.iloc[:VAL_ROWS]
+# Optional row cap
+if args.val_rows:
+    X_val_llm = X_val_llm.iloc[:args.val_rows]
+    X_val_encoded = X_val_encoded.iloc[:args.val_rows]
+    y_val = y_val.iloc[:args.val_rows]
 
 print(f"✅ Training on {len(X_train_llm)} rows, validating on {len(X_val_llm)} rows")
 
-# Define baseline models
+# Models
 baselines = {
     "dummy": DummyClassifier(strategy="most_frequent"),
     "decision_tree": DecisionTreeClassifier(max_depth=3),
@@ -64,39 +90,28 @@ baselines = {
     "random_forest": RandomForestClassifier(n_estimators=20, max_depth=4),
     "gradient_boosting": GradientBoostingClassifier(n_estimators=30, max_depth=3),
 }
-
-# Define LLM models
 llm_models = ["gpt-3.5-turbo", "gpt-4", "gpt-4o", "o3-mini", "o4-mini"]
 promptlearners = {
     f"promptlearn_{model}": PromptClassifier(
-        model=model, verbose=False, chunk_threshold=300, force_chunking=True, max_chunks=8
+        model=model, verbose=False, chunk_threshold=1000, force_chunking=False, max_chunks=8
     ) for model in llm_models
 }
-
-# Combine models
 all_models = {**baselines, **promptlearners}
 
+# Benchmark
 results = []
 print("🚀 Beginning benchmark...\n")
 
 for name, clf in all_models.items():
     print(f"▶️ Training: {name}")
     start = time.time()
-
-    if "promptlearn" in name:
-        clf.fit(X_train_llm, y_train)
-    else:
-        clf.fit(X_train_encoded, y_train)
-
+    clf.fit(X_train_llm if "promptlearn" in name else X_train_encoded, y_train)
     fit_time = time.time() - start
     print(f"⏱️ Fit time: {fit_time:.2f}s")
 
     print(f"🔮 Predicting: {name}")
     start = time.time()
-    if "promptlearn" in name:
-        y_pred = clf.predict(X_val_llm)
-    else:
-        y_pred = clf.predict(X_val_encoded)
+    y_pred = clf.predict(X_val_llm if "promptlearn" in name else X_val_encoded)
     pred_time = time.time() - start
     acc = accuracy_score(y_val, y_pred)
     print(f"✅ Accuracy ({name}): {acc:.4f} | ⏱️ Predict time: {pred_time:.2f}s\n")
@@ -108,7 +123,22 @@ for name, clf in all_models.items():
         "predict_time_sec": pred_time
     })
 
-# Show final results
+# Final report
 df_results = pd.DataFrame(results).sort_values("accuracy", ascending=False)
 print("\n=== Final Results ===")
 print(df_results.to_string(index=False))
+
+# for data/mammal dataset:
+#
+# === Final Results ===
+#                     model  accuracy  fit_time_sec  predict_time_sec
+#       promptlearn_o4-mini      1.00     13.748081        205.676546
+#        promptlearn_gpt-4o      0.97     11.945308         49.944678
+#       promptlearn_o3-mini      0.97     16.718566        301.371571
+# promptlearn_gpt-3.5-turbo      0.85      8.442066         43.714988
+#       logistic_regression      0.60      0.019625          0.000663
+#             decision_tree      0.53      0.001509          0.000463
+#         promptlearn_gpt-4      0.53     27.862522         75.809565
+#         gradient_boosting      0.53      0.016011          0.000747
+#             random_forest      0.46      0.010755          0.001060
+#                     dummy      0.34      0.000591          0.000097
