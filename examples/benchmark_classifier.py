@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # example:
-# python examples/benchmark_runner.py --train examples/data/mammal_train.csv --val examples/data/mammal_val.csv --target is_mammal --val_rows 100
+# python examples/benchmark_classifier.py --train examples/data/mammal_train.csv --val examples/data/mammal_val.csv --target is_mammal --val_rows 100
 
 import argparse
 import pandas as pd
@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # Args
-parser = argparse.ArgumentParser(description="Run benchmark with train/val files or OpenML dataset")
+parser = argparse.ArgumentParser(description="Run classifier benchmark with train/val files or OpenML dataset")
 parser.add_argument("--dataset", type=str, help="OpenML dataset name or single CSV/TSV file path")
 parser.add_argument("--target", type=str, required=True, help="Name of the target column")
 parser.add_argument("--train", type=str, help="Path to train CSV/TSV")
