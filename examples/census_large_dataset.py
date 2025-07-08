@@ -37,7 +37,7 @@ X_shuffled, X_val, y_shuffled, y_val = train_test_split(
 )
 
 # Truncate dataset to simulate chunked training
-CHUNK_SIZE = 300
+CHUNK_SIZE = 10
 N_CHUNKS = 8
 TRAIN_ROWS = CHUNK_SIZE * N_CHUNKS
 VAL_ROWS = 20
@@ -54,8 +54,9 @@ joblib.dump({"X_val": X_val, "y_val": y_val}, "examples/saves/val_data.joblib")
 # Train the classifier with chunked logic
 clf = PromptClassifier(
     verbose=True,
-    chunk_threshold=100,
+    chunk_threshold=5,  # small threshold to force some compromise in first heuristics
     force_chunking=True,
+    chunk_size=CHUNK_SIZE,
     max_chunks=N_CHUNKS,
     save_dir="examples/saves"
 )

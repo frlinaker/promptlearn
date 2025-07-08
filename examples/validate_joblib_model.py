@@ -42,11 +42,7 @@ def load_models():
 
 def get_model_metadata(model):
     return {
-        "prompt_len": getattr(model, "prompt_length", None),
-        "num_examples": getattr(model, "num_examples", None),
-        "num_chunks": getattr(model, "num_chunks", None),
-        "model_name": getattr(model, "model_name", None),
-        "token_cost": getattr(model, "token_cost", None)
+        "prompt_len": getattr(model, "prompt_length", None)
     }
 
 def main():
