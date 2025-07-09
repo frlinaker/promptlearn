@@ -3,7 +3,7 @@ import joblib
 import io
 
 # Assuming 'my_subclass_model.joblib' exists
-file_path = 'examples/saves/heuristic_chunk_01.joblib'
+file_path = 'examples/preg.joblib'
 
 try:
     with open(file_path, 'rb') as f:

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # example:
-# python examples/benchmark_regressor.py --train examples/data/cooling_train.csv --val examples/data/cooling_val.csv --target cooling_time_minutes --val_rows 100
+# python examples/benchmark_regressor.py --train examples/data/fall_train.csv --val examples/data/fall_val.csv --target fall_time_s
 
 import argparse
 import pandas as pd
@@ -114,16 +114,16 @@ df_results = pd.DataFrame(results).sort_values("mse")
 print("\n=== Final Results ===")
 print(df_results.to_string(index=False))
 
-# python .\examples\benchmark_regressor.py --train examples/data/fall_train.csv --val examples/data/fall_val.csv --target fall_time_s --val_rows 100
+# python .\examples\benchmark_regressor.py --train examples/data/fall_train.csv --val examples/data/fall_val.csv --target fall_time_s
 # === Final Results ===
-#                     model       mse  fit_time_sec  predict_time_sec
-#       promptlearn_o4-mini  0.000056      5.550305        396.335431
-#        promptlearn_gpt-4o  0.000062      0.624865         10.903851
-#       promptlearn_o3-mini  0.000164      6.718749        131.593662
-#             random_forest  0.026922      0.008231          0.000893
-#         gradient_boosting  0.035371      0.007026          0.000588
-#             decision_tree  0.066745      0.000931          0.000312
-#         linear_regression  0.497854      0.000765          0.000311
-#                     dummy  5.272532      0.000632          0.000107
-# promptlearn_gpt-3.5-turbo 31.335668      1.225597          6.849122
-#         promptlearn_gpt-4 43.175052      1.800170         18.236200
+#                     model          mse  fit_time_sec  predict_time_sec
+#        promptlearn_gpt-4o 2.366583e-31      2.141143          0.000624
+#       promptlearn_o3-mini 2.366583e-31      7.652526          0.000641
+#       promptlearn_o4-mini 2.366583e-31     11.474670          0.000639
+#             random_forest 2.347590e-02      0.010189          0.000904
+#         gradient_boosting 3.537142e-02      0.009220          0.000680
+#             decision_tree 6.674515e-02      0.000895          0.000411
+#         linear_regression 4.978544e-01      0.015677          0.000996
+#         promptlearn_gpt-4 1.560732e+00      7.180273          0.000686
+#                     dummy 5.272532e+00      0.000854          0.000066
+# promptlearn_gpt-3.5-turbo 1.819323e+01      1.182629          0.000602
