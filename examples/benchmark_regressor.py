@@ -112,7 +112,7 @@ for name, clf in all_models.items():
 
 df_results = pd.DataFrame(results).sort_values("mse")
 print("\n=== Final Results ===")
-print(df_results.to_string(index=False))
+print(df_results.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
 
 # python .\examples\benchmark_regressor.py --train examples/data/fall_train.csv --val examples/data/fall_val.csv --target fall_time_s
 # === Final Results ===
