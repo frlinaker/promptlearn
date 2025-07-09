@@ -54,11 +54,6 @@ joblib.dump({"X_val": X_val, "y_val": y_val}, "examples/saves/val_data.joblib")
 # Train the classifier with chunked logic
 clf = PromptClassifier(
     verbose=True,
-    chunk_threshold=5,  # small threshold to force some compromise in first heuristics
-    force_chunking=True,
-    chunk_size=CHUNK_SIZE,
-    max_chunks=N_CHUNKS,
-    save_dir="examples/saves"
 )
 
 clf.fit(X_train, y_train)
@@ -69,4 +64,3 @@ acc = accuracy_score(y_val, y_pred)
 
 print(f"✅ Validation Accuracy: {acc:.4f}")
 
-clf.show_heuristic_evolution()

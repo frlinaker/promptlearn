@@ -6,6 +6,7 @@ Example: Using PromptClassifier on the Titanic dataset with optional chunked tra
 
 import pandas as pd
 from sklearn.metrics import accuracy_score, classification_report
+from sklearn.model_selection import train_test_split
 from promptlearn import PromptClassifier
 import logging
 
@@ -36,29 +37,21 @@ X = X.fillna("unknown")
 for col in X.select_dtypes(include="object").columns:
     X[col] = X[col].astype(str)
 
-# Split into train/validation
-CHUNK_ROWS = 300
-N_CHUNKS = 2
-TRAIN_ROWS = CHUNK_ROWS * N_CHUNKS
-
-X_train = X.iloc[:TRAIN_ROWS]
-y_train = y.iloc[:TRAIN_ROWS]
-
-X_val = X.iloc[TRAIN_ROWS:]
-y_val = y.iloc[TRAIN_ROWS:]
+# Shuffle and split before chunking
+X_train, X_val, y_train, y_val = train_test_split(
+    X, y,
+    test_size=0.3,
+    stratify=y,           # optional: maintain class balance
+    random_state=42
+)
 
 # Initialize classifier with chunking enabled
 clf = PromptClassifier(
-    verbose=True,
-    chunk_threshold=100,   # small threshold to always trigger chunking here
-    max_chunks=N_CHUNKS,
-    force_chunking=True
+    verbose=True
 )
 
 # Train on a limited number of chunks
 clf.fit(X_train, y_train)
-
-clf.show_heuristic_evolution()
 
 # Evaluate on held-out data
 y_pred = clf.predict(X_val)
@@ -66,5 +59,4 @@ acc = accuracy_score(y_val, y_pred)
 
 print(f"✅ Validation Accuracy: {acc:.4f}")
 
-clf.show_heuristic_evolution()
 print(classification_report(y_val, y_pred))

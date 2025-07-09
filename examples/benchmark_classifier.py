@@ -129,16 +129,15 @@ print("\n=== Final Results ===")
 print(df_results.to_string(index=False))
 
 # for data/mammal dataset:
-#
 # === Final Results ===
 #                     model  accuracy  fit_time_sec  predict_time_sec
-#       promptlearn_o4-mini      1.00     13.748081        205.676546
-#        promptlearn_gpt-4o      0.97     11.945308         49.944678
-#       promptlearn_o3-mini      0.97     16.718566        301.371571
-# promptlearn_gpt-3.5-turbo      0.85      8.442066         43.714988
-#       logistic_regression      0.60      0.019625          0.000663
-#             decision_tree      0.53      0.001509          0.000463
-#         promptlearn_gpt-4      0.53     27.862522         75.809565
-#         gradient_boosting      0.53      0.016011          0.000747
-#             random_forest      0.46      0.010755          0.001060
-#                     dummy      0.34      0.000591          0.000097
+#       promptlearn_o4-mini      1.00     66.392957          0.003270
+#       promptlearn_o3-mini      0.94     41.296453          0.002382
+#         promptlearn_gpt-4      0.66     12.428878          0.002444
+#        promptlearn_gpt-4o      0.66      3.613194          0.003657
+# promptlearn_gpt-3.5-turbo      0.63      2.645796          0.002558
+#       logistic_regression      0.60      0.028289          0.000958
+#         gradient_boosting      0.53      0.016901          0.000801
+#             decision_tree      0.53      0.002735          0.001191
+#             random_forest      0.44      0.012090          0.001132
+#                     dummy      0.34      0.000579          0.014026
