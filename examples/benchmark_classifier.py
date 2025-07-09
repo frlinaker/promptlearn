@@ -93,7 +93,7 @@ baselines = {
 llm_models = ["gpt-3.5-turbo", "gpt-4", "gpt-4o", "o3-mini", "o4-mini"]
 promptlearners = {
     f"promptlearn_{model}": PromptClassifier(
-        model=model, verbose=False, chunk_threshold=1000, force_chunking=False, max_chunks=8
+        model=model, verbose=True
     ) for model in llm_models
 }
 all_models = {**baselines, **promptlearners}
