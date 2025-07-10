@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # example:
-# python examples/benchmark_classifier.py --train examples/data/mammal_train.csv --val examples/data/mammal_val.csv --target is_mammal --val_rows 100
+# python examples/benchmark_classifier.py --train examples/data/mammal_train.csv --val examples/data/mammal_val.csv --target is_mammal
 
 import argparse
 import pandas as pd
