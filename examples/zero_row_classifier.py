@@ -22,4 +22,6 @@ clf.fit(X, y)  # This should trigger prompt construction with only headers
 # 3. Predict on a new example
 new_example = pd.DataFrame([{"country_name": "Japan"}])
 prediction = clf.predict(new_example)[0]
-print(f"\nDoes the flag of Japan contain blue? {'Yes (incorrect)' if prediction else 'No (correct)'}")
+print(
+    f"\nDoes the flag of Japan contain blue? {'Yes (incorrect)' if prediction else 'No (correct)'}"
+)

@@ -3,10 +3,10 @@ import joblib
 import io
 
 # Assuming 'my_subclass_model.joblib' exists
-file_path = 'examples/preg.joblib'
+file_path = "examples/preg.joblib"
 
 try:
-    with open(file_path, 'rb') as f:
+    with open(file_path, "rb") as f:
         pickle_stream = f.read()
 
     # Use io.BytesIO to treat the byte string as a file-like object

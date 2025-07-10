@@ -30,10 +30,7 @@ X = X.astype(str)
 
 # Shuffle and split before chunking
 X_shuffled, X_val, y_shuffled, y_val = train_test_split(
-    X, y,
-    test_size=0.3,
-    stratify=y,           # optional: maintain class balance
-    random_state=42
+    X, y, test_size=0.3, stratify=y, random_state=42  # optional: maintain class balance
 )
 
 # Truncate dataset to simulate chunked training
@@ -63,4 +60,3 @@ y_pred = clf.predict(X_val)
 acc = accuracy_score(y_val, y_pred)
 
 print(f"✅ Validation Accuracy: {acc:.4f}")
-

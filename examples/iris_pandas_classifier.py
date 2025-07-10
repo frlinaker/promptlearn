@@ -20,7 +20,9 @@ X = pd.DataFrame(iris.data, columns=iris.feature_names)  # type: ignore
 y = pd.Series(iris.target, name="species")  # type: ignore
 
 # 2. Split the data into training and testing sets
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.3, random_state=42
+)
 
 # 3. Create and train the PromptClassifier
 pcl = PromptClassifier(verbose=True)  # enable verbose logging

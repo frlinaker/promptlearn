@@ -15,15 +15,21 @@ logging.basicConfig(level=logging.INFO)
 # Load Titanic dataset from seaborn (or other CSV source if needed)
 try:
     import seaborn as sns
+
     df = sns.load_dataset("titanic")
 except:
-    df = pd.read_csv("https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv")
+    df = pd.read_csv(
+        "https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv"
+    )
 
 # Show dataset information
 print(df.info())
 
 # Drop columns with too many missing values or that leak the target
-df = df.drop(columns=["deck", "embark_town", "alive", "who", "adult_male", "class", "alone"], errors="ignore")
+df = df.drop(
+    columns=["deck", "embark_town", "alive", "who", "adult_male", "class", "alone"],
+    errors="ignore",
+)
 df = df.dropna(subset=["Survived"])
 
 # Select features and target
@@ -39,16 +45,11 @@ for col in X.select_dtypes(include="object").columns:
 
 # Shuffle and split before chunking
 X_train, X_val, y_train, y_val = train_test_split(
-    X, y,
-    test_size=0.3,
-    stratify=y,           # optional: maintain class balance
-    random_state=42
+    X, y, test_size=0.3, stratify=y, random_state=42  # optional: maintain class balance
 )
 
 # Initialize classifier with chunking enabled
-clf = PromptClassifier(
-    verbose=True
-)
+clf = PromptClassifier(verbose=True)
 
 # Train on a limited number of chunks
 clf.fit(X_train, y_train)

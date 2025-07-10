@@ -19,18 +19,26 @@ from promptlearn import PromptRegressor
 logging.basicConfig(level=logging.INFO)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
-parser = argparse.ArgumentParser(description="Run regressor benchmark with train/val files or OpenML dataset")
-parser.add_argument("--dataset", type=str, help="OpenML dataset name or single CSV/TSV file path")
-parser.add_argument("--target", type=str, required=True, help="Name of the target column")
+parser = argparse.ArgumentParser(
+    description="Run regressor benchmark with train/val files or OpenML dataset"
+)
+parser.add_argument(
+    "--dataset", type=str, help="OpenML dataset name or single CSV/TSV file path"
+)
+parser.add_argument(
+    "--target", type=str, required=True, help="Name of the target column"
+)
 parser.add_argument("--train", type=str, help="Path to train CSV/TSV")
 parser.add_argument("--val", type=str, help="Path to val CSV/TSV")
 parser.add_argument("--val_rows", type=int, default=None, help="Cap number of val rows")
 args = parser.parse_args()
 
+
 def load_file(path):
     if path.endswith(".tsv"):
         return pd.read_csv(path, sep="\t")
     return pd.read_csv(path)
+
 
 if args.train and args.val:
     print("📦 Loading train/val from separate files...")
@@ -44,6 +52,7 @@ elif args.dataset:
         df_train, df_val = train_test_split(df_full, test_size=0.3, random_state=42)
     else:
         from sklearn.datasets import fetch_openml
+
         data = fetch_openml(args.dataset, version=1, as_frame=True)
         df_full = pd.concat([data.data, data.target.rename(args.target)], axis=1)
         df_train, df_val = train_test_split(df_full, test_size=0.3, random_state=42)
@@ -59,15 +68,15 @@ X_combined = pd.concat([X_train_raw, X_val_raw], axis=0)
 X_combined_encoded = pd.get_dummies(X_combined)
 X_combined_llm = X_combined.astype(str).fillna("unknown")
 
-X_train_encoded = X_combined_encoded.iloc[:len(X_train_raw)]
-X_val_encoded = X_combined_encoded.iloc[len(X_train_raw):]
-X_train_llm = X_combined_llm.iloc[:len(X_train_raw)]
-X_val_llm = X_combined_llm.iloc[len(X_train_raw):]
+X_train_encoded = X_combined_encoded.iloc[: len(X_train_raw)]
+X_val_encoded = X_combined_encoded.iloc[len(X_train_raw) :]
+X_train_llm = X_combined_llm.iloc[: len(X_train_raw)]
+X_val_llm = X_combined_llm.iloc[len(X_train_raw) :]
 
 if args.val_rows:
-    X_val_llm = X_val_llm.iloc[:args.val_rows]
-    X_val_encoded = X_val_encoded.iloc[:args.val_rows]
-    y_val = y_val.iloc[:args.val_rows]
+    X_val_llm = X_val_llm.iloc[: args.val_rows]
+    X_val_encoded = X_val_encoded.iloc[: args.val_rows]
+    y_val = y_val.iloc[: args.val_rows]
 
 print(f"✅ Training on {len(X_train_llm)} rows, validating on {len(X_val_llm)} rows")
 
@@ -80,9 +89,8 @@ baselines = {
 }
 llm_models = ["gpt-3.5-turbo", "gpt-4", "gpt-4o", "o3-mini", "o4-mini"]
 promptlearners = {
-    f"promptlearn_{model}": PromptRegressor(
-        model=model, verbose=False
-    ) for model in llm_models
+    f"promptlearn_{model}": PromptRegressor(model=model, verbose=False)
+    for model in llm_models
 }
 all_models = {**baselines, **promptlearners}
 
@@ -103,12 +111,14 @@ for name, clf in all_models.items():
     mse = mean_squared_error(y_val, y_pred)
     print(f"✅ MSE ({name}): {mse:.4f} | ⏱️ Predict time: {pred_time:.2f}s\n")
 
-    results.append({
-        "model": name,
-        "mse": mse,
-        "fit_time_sec": fit_time,
-        "predict_time_sec": pred_time
-    })
+    results.append(
+        {
+            "model": name,
+            "mse": mse,
+            "fit_time_sec": fit_time,
+            "predict_time_sec": pred_time,
+        }
+    )
 
 df_results = pd.DataFrame(results).sort_values("mse")
 print("\n=== Final Results ===")

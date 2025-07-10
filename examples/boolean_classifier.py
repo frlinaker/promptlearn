@@ -12,12 +12,7 @@ from promptlearn import PromptClassifier
 logging.basicConfig(level=logging.INFO)
 
 # XOR dataset
-X = np.array([
-    [0, 0],
-    [0, 1],
-    [1, 0],
-    [1, 1]
-])
+X = np.array([[0, 0], [0, 1], [1, 0], [1, 1]])
 y = np.array([0, 1, 1, 0])  # XOR outputs
 
 # Create and train the prompt-based classifier

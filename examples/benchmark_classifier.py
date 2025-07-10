@@ -20,13 +20,20 @@ logging.basicConfig(level=logging.INFO)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # Args
-parser = argparse.ArgumentParser(description="Run classifier benchmark with train/val files or OpenML dataset")
-parser.add_argument("--dataset", type=str, help="OpenML dataset name or single CSV/TSV file path")
-parser.add_argument("--target", type=str, required=True, help="Name of the target column")
+parser = argparse.ArgumentParser(
+    description="Run classifier benchmark with train/val files or OpenML dataset"
+)
+parser.add_argument(
+    "--dataset", type=str, help="OpenML dataset name or single CSV/TSV file path"
+)
+parser.add_argument(
+    "--target", type=str, required=True, help="Name of the target column"
+)
 parser.add_argument("--train", type=str, help="Path to train CSV/TSV")
 parser.add_argument("--val", type=str, help="Path to val CSV/TSV")
 parser.add_argument("--val_rows", type=int, default=None, help="Cap number of val rows")
 args = parser.parse_args()
+
 
 # Load data
 def load_file(path):
@@ -34,21 +41,29 @@ def load_file(path):
         return pd.read_csv(path, sep="\t")
     return pd.read_csv(path)
 
+
 if args.train and args.val:
     print("📦 Loading train/val from separate files...")
     df_train = load_file(args.train)
     df_val = load_file(args.val)
-    df_full = pd.concat([df_train, df_val], ignore_index=True)  # for consistent encoding
+    df_full = pd.concat(
+        [df_train, df_val], ignore_index=True
+    )  # for consistent encoding
 elif args.dataset:
     print(f"📦 Loading dataset: {args.dataset}")
     if args.dataset.endswith(".csv") or args.dataset.endswith(".tsv"):
         df_full = load_file(args.dataset)
-        df_train, df_val = train_test_split(df_full, test_size=0.3, stratify=df_full[args.target], random_state=42)
+        df_train, df_val = train_test_split(
+            df_full, test_size=0.3, stratify=df_full[args.target], random_state=42
+        )
     else:
         from sklearn.datasets import fetch_openml
+
         data = fetch_openml(args.dataset, version=1, as_frame=True)
         df_full = pd.concat([data.data, data.target.rename(args.target)], axis=1)
-        df_train, df_val = train_test_split(df_full, test_size=0.3, stratify=df_full[args.target], random_state=42)
+        df_train, df_val = train_test_split(
+            df_full, test_size=0.3, stratify=df_full[args.target], random_state=42
+        )
 else:
     raise ValueError("Must provide either --dataset or both --train and --val")
 
@@ -69,16 +84,16 @@ X_combined_encoded = pd.get_dummies(X_combined)
 X_combined_llm = X_combined.astype(str).fillna("unknown")
 
 # Split encoded
-X_train_encoded = X_combined_encoded.iloc[:len(X_train_raw)]
-X_val_encoded = X_combined_encoded.iloc[len(X_train_raw):]
-X_train_llm = X_combined_llm.iloc[:len(X_train_raw)]
-X_val_llm = X_combined_llm.iloc[len(X_train_raw):]
+X_train_encoded = X_combined_encoded.iloc[: len(X_train_raw)]
+X_val_encoded = X_combined_encoded.iloc[len(X_train_raw) :]
+X_train_llm = X_combined_llm.iloc[: len(X_train_raw)]
+X_val_llm = X_combined_llm.iloc[len(X_train_raw) :]
 
 # Optional row cap
 if args.val_rows:
-    X_val_llm = X_val_llm.iloc[:args.val_rows]
-    X_val_encoded = X_val_encoded.iloc[:args.val_rows]
-    y_val = y_val.iloc[:args.val_rows]
+    X_val_llm = X_val_llm.iloc[: args.val_rows]
+    X_val_encoded = X_val_encoded.iloc[: args.val_rows]
+    y_val = y_val.iloc[: args.val_rows]
 
 print(f"✅ Training on {len(X_train_llm)} rows, validating on {len(X_val_llm)} rows")
 
@@ -92,9 +107,8 @@ baselines = {
 }
 llm_models = ["gpt-3.5-turbo", "gpt-4", "gpt-4o", "o3-mini", "o4-mini"]
 promptlearners = {
-    f"promptlearn_{model}": PromptClassifier(
-        model=model, verbose=True
-    ) for model in llm_models
+    f"promptlearn_{model}": PromptClassifier(model=model, verbose=True)
+    for model in llm_models
 }
 all_models = {**baselines, **promptlearners}
 
@@ -116,12 +130,14 @@ for name, clf in all_models.items():
     acc = accuracy_score(y_val, y_pred)
     print(f"✅ Accuracy ({name}): {acc:.4f} | ⏱️ Predict time: {pred_time:.2f}s\n")
 
-    results.append({
-        "model": name,
-        "accuracy": acc,
-        "fit_time_sec": fit_time,
-        "predict_time_sec": pred_time
-    })
+    results.append(
+        {
+            "model": name,
+            "accuracy": acc,
+            "fit_time_sec": fit_time,
+            "predict_time_sec": pred_time,
+        }
+    )
 
 # Final report
 df_results = pd.DataFrame(results).sort_values("accuracy", ascending=False)

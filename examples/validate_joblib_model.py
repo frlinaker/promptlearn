@@ -14,9 +14,9 @@ CHUNK_PATTERN = re.compile(r"heuristic_chunk_(\d+)\.joblib")
 
 # Setup logging
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s"
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
 )
+
 
 def load_validation_data():
     logging.info(f"🔍 Loading validation data from: {VAL_DATA_PATH}")
@@ -25,6 +25,7 @@ def load_validation_data():
     y_val = val["y_val"]
     logging.info(f"✅ Loaded validation set with {len(X_val)} rows")
     return X_val, y_val
+
 
 def load_models():
     logging.info(f"🔍 Scanning directory: {MODEL_DIR}")
@@ -40,10 +41,10 @@ def load_models():
         logging.warning("⚠️ No chunk models found in the saves directory.")
     return sorted(models)
 
+
 def get_model_metadata(model):
-    return {
-        "prompt_len": getattr(model, "prompt_length", None)
-    }
+    return {"prompt_len": getattr(model, "prompt_length", None)}
+
 
 def main():
     logging.info("🚀 Starting chunk validation")
@@ -74,11 +75,7 @@ def main():
         except Exception as e:
             logging.error(f"❌ Failed to validate chunk {chunk_id}: {e}")
             traceback.print_exc()
-            result = {
-                "chunk": chunk_id,
-                "accuracy": None,
-                "error": str(e)
-            }
+            result = {"chunk": chunk_id, "accuracy": None, "error": str(e)}
 
         results.append(result)
 
@@ -90,6 +87,7 @@ def main():
 
     print("\n📊 Chunk Validation Summary:\n")
     print(df.round(4).to_string(index=False))
+
 
 if __name__ == "__main__":
     main()
