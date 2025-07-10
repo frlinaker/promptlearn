@@ -59,18 +59,13 @@ def evaluate_model(model_name: str, X_train, y_train, X_test, y_true) -> dict:
     reg.fit(X_train, y_train)
 
     print("📜 Learned heuristic:")
-    print(reg.heuristic_)
+    print(reg.python_code_)
 
-    y_pred = []
-    for x in X_test.itertuples(index=False):
-        try:
-            x_dict = (
-                x._asdict() if hasattr(x, "_asdict") else dict(zip(X_test.columns, x))
-            )
-            y_pred.append(reg._predict_one(x_dict))
-        except Exception as e:
-            warnings.warn(f"⚠️ Failed to predict for input {x}: {e}")
-            y_pred.append(np.nan)
+    try:
+        y_pred = reg.predict(X_test)
+    except Exception as e:
+        warnings.warn(f"⚠️ Failed to predict: {e}")
+        y_pred = np.full(len(X_test), np.nan)
 
     y_pred = np.array(y_pred)
     valid_mask = ~np.isnan(y_pred)
@@ -98,7 +93,7 @@ def evaluate_model(model_name: str, X_train, y_train, X_test, y_true) -> dict:
 
     print(f"📊 MSE: {mse:.4f}" if not np.isnan(mse) else "📊 MSE: NaN")
 
-    return {"model": model_name, "mse": mse, "heuristic": reg.heuristic_}
+    return {"model": model_name, "mse": mse, "heuristic": reg.python_code_}
 
 
 def run_benchmark(models, task: str, seeds=[42], noise_std=0.2):
@@ -138,3 +133,14 @@ if __name__ == "__main__":
     final_df = pd.concat(all_results, ignore_index=True)
     print("\n=== Final Results ===")
     print(final_df[["task", "model", "seed", "mse"]])
+
+# === Final Results ===
+#            task    model  seed         mse
+# 0     linear_1d  o3-mini    42    0.058818
+# 1     linear_1d  o4-mini    42    0.000000
+# 2     linear_1d    gpt-4    42    7.487149
+# 3     linear_1d   gpt-4o    42   17.883583
+# 4  nonlinear_2d  o3-mini    42    1.568751
+# 5  nonlinear_2d  o4-mini    42    3.220078
+# 6  nonlinear_2d    gpt-4    42  974.911881
+# 7  nonlinear_2d   gpt-4o    42   30.974802
