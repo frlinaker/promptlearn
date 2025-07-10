@@ -25,3 +25,6 @@ prediction = clf.predict(new_example)[0]
 print(
     f"\nDoes the flag of Japan contain blue? {'Yes (incorrect)' if prediction else 'No (correct)'}"
 )
+
+samples = clf.sample(20)
+print(samples)

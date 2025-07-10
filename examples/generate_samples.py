@@ -19,5 +19,5 @@ y = np.array([1, 3, 5, 7, 9])  # 2x + 3
 model = PromptRegressor(verbose=True)
 model.fit(X, y)
 
-samples = model.sample(10)
+samples = model.sample(20)
 print(samples)
