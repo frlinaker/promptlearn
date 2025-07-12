@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
-# example:
+# example
+# remember to:   pip install -e .     in the root directory before running
 # python examples/benchmark_classifier.py --train examples/data/mammal_train.csv --val examples/data/mammal_val.csv --target is_mammal
 
 import argparse
