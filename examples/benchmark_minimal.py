@@ -9,8 +9,7 @@ import yaml
 
 from promptlearn.benchmark import (
     run_benchmark,
-    make_sklearn,
-    make_promptlearn_variant,
+    mark_winners_for_display,
 )
 
 # -----------------------------------------------------------------------------
@@ -94,17 +93,20 @@ def main():
     # ]
 
     cls_df, reg_df = run_benchmark(
-        tasks,
-        models=models,
-        out_dir="runs",
-        resume=True,
-        return_kind="split",
+        tasks, models=models, out_dir="runs", resume=True, return_kind="split"
     )
 
     print("\n=== Classification ===")
-    print(cls_df.round(4))
+    print(
+        mark_winners_for_display(
+            cls_df, primary_metric="accuracy", higher_is_better=True
+        )
+    )
+
     print("\n=== Regression ===")
-    print(reg_df.round(4))
+    print(
+        mark_winners_for_display(reg_df, primary_metric="rmse", higher_is_better=False)
+    )
 
 
 if __name__ == "__main__":
