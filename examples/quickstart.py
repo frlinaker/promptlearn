@@ -560,7 +560,7 @@ def _print_demo_list():
 def _run_demo(name, args):
     """Run one demo and return (status, seconds). Never raises, so running the
     whole suite isn't aborted by a single failing demo (e.g. a flaky LLM call)."""
-    banner(f"DEMO: {name}  (model={args.model})")
+    banner(f"DATASET: {name}  (model={args.model})")
     print("  running… (live LLM calls; a reasoning model can take a while per fit)\n")
 
     global _DUMP_DIR
