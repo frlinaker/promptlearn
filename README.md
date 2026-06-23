@@ -74,6 +74,18 @@ These estimators follow the same API as other `scikit-learn` models (`fit`, `pre
 
 ---
 
+### 🚀 Try It
+
+The [`examples/`](examples/) directory has runnable scripts. The Titanic example is a good guided tour — it fits a classifier, prints the generated `predict()` function, explains the learned rule, and can save the artifacts:
+
+```bash
+python examples/titanic_classifier.py --explain --dump artifacts/
+```
+
+Run `python examples/titanic_classifier.py --help` for all flags (`--model`, `--examples`, `--verbose`, …).
+
+---
+
 ### 🔌 Choose Your Provider
 
 The LLM provider is selected by the `model` string and resolved via [LiteLLM](https://github.com/BerriAI/litellm), so you are not locked into OpenAI:
