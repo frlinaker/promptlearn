@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 """Compare promptlearn against classical models on the same dataset.
 
-This replaces the old per-task benchmark scripts. It fits a configurable set of
-models — promptlearn's PromptClassifier/PromptRegressor alongside scikit-learn
-baselines and (if installed) XGBoost — on one dataset and prints:
+Fits a configurable set of models — promptlearn's PromptClassifier/PromptRegressor
+alongside scikit-learn baselines and (if installed) XGBoost — on one dataset and
+prints:
 
   * a side-by-side METRICS table (one row per model), and
   * a row-by-row PREDICTIONS table (one column per model).

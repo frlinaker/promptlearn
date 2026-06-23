@@ -64,7 +64,7 @@ def _fitted(cls=PromptClassifier):
 def test_getstate_only_contains_safe_fields():
     est = _fitted()
     state = est.__getstate__()
-    assert "llm_client" not in state  # the old OpenAI client must stay gone
+    assert "llm_client" not in state  # no raw LLM client should ever be serialized
     assert set(state).issubset(
         ALLOWED_STATE_FIELDS
     ), f"Unexpected serialized field(s): {set(state) - ALLOWED_STATE_FIELDS}"

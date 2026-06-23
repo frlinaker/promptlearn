@@ -125,7 +125,7 @@ def safe_exec_fn(
         return default
 
 
-# For compatibility with previous usage:
+# Typed convenience wrappers around safe_exec_fn.
 def safe_predict(fn: Callable, features: dict) -> int:
     return safe_exec_fn(fn, features, output_type=int, default=0, label="PredictFn")
 
