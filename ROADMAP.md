@@ -1,11 +1,11 @@
 # Roadmap
 
-Current stable release: **v0.3.0**
+Current stable release: **v0.3.1**
 
 ---
 
-## [v0.3.1] — benchmark release *(unreleased, ready to tag)*
-Benchmark improvements already on `main` since v0.3.0:
+## [v0.3.1] — benchmark release *(released 2026-06-22)*
+Benchmark improvements shipped since v0.3.0:
 - [x] Benchmark output highlights winning models
 - [x] Benchmark cleanup and black formatting
 - [x] Remove unused functionality
