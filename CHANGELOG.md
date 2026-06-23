@@ -5,7 +5,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [Unreleased] — benchmark polish
+## [0.3.1] — 2026-06-22 — benchmark polish
 ### Changed
 - Benchmark output now highlights winning models per metric
 - Benchmark code reformatted with black and redundancies removed
