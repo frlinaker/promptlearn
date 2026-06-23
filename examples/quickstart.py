@@ -28,7 +28,10 @@ Demos, roughly easiest first:
 import argparse
 import logging
 import os
+import sys
 import tempfile
+import time
+import traceback
 from pathlib import Path
 
 import numpy as np
@@ -488,6 +491,19 @@ def parse_args():
     return p.parse_args()
 
 
+def _run_demo(name, args):
+    """Run one demo and return (status, seconds). Never raises, so running the
+    whole suite isn't aborted by a single failing demo (e.g. a flaky LLM call)."""
+    banner(f"DEMO: {name}  (model={args.model})")
+    start = time.time()
+    try:
+        DEMOS[name](args)
+        return "ok", time.time() - start
+    except Exception:
+        traceback.print_exc()
+        return "FAILED", time.time() - start
+
+
 def main():
     args = parse_args()
     if args.list:
@@ -500,9 +516,20 @@ def main():
         logging.basicConfig(level=logging.INFO)
 
     selected = [args.demo] if args.demo else list(DEMOS)
-    for name in selected:
-        banner(f"DEMO: {name}  (model={args.model})")
-        DEMOS[name](args)
+    results = [(name, *_run_demo(name, args)) for name in selected]
+
+    # Summarise when running more than one demo (i.e. the full --demo-less run).
+    if len(results) > 1:
+        banner("SUMMARY")
+        for name, status, secs in results:
+            print(f"  {name:16} {status:7} {secs:6.1f}s")
+        failed = [name for name, status, _ in results if status != "ok"]
+        if failed:
+            print(
+                f"\n{len(failed)} of {len(results)} demos failed: {', '.join(failed)}"
+            )
+            sys.exit(1)
+        print(f"\nAll {len(results)} demos passed.")
 
 
 if __name__ == "__main__":
