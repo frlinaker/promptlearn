@@ -11,10 +11,35 @@ def test_get_set_params():
 
 
 def test_call_llm_raises(monkeypatch):
+    import litellm
+
     est = BasePromptEstimator(model="gpt-4", verbose=False, max_train_rows=1)
-    monkeypatch.setattr(est, "llm_client", None)
-    with pytest.raises(Exception):
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("provider error")
+
+    monkeypatch.setattr(litellm, "completion", boom)
+    with pytest.raises(RuntimeError):
         est._call_llm("this should fail")
+
+
+def test_call_llm_normalizes_ollama_model(monkeypatch):
+    """The documented ``ollama:model`` syntax is mapped to litellm's ``ollama/model``."""
+    import litellm
+
+    captured = {}
+
+    def fake_completion(model, messages, **kwargs):
+        captured["model"] = model
+        message = type("Message", (), {"content": "hello"})
+        choice = type("Choice", (), {"message": message})
+        return type("Response", (), {"choices": [choice]})
+
+    monkeypatch.setattr(litellm, "completion", fake_completion)
+    est = BasePromptEstimator(model="ollama:llama3.1", verbose=False, max_train_rows=1)
+    out = est._call_llm("hi")
+    assert captured["model"] == "ollama/llama3.1"
+    assert out == "hello"
 
 
 def test_extend_code_handles_llm_failure(monkeypatch):

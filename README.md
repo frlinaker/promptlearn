@@ -74,6 +74,20 @@ These estimators follow the same API as other `scikit-learn` models (`fit`, `pre
 
 ---
 
+### 🔌 Choose Your Provider
+
+The LLM provider is selected by the `model` string and resolved via [LiteLLM](https://github.com/BerriAI/litellm), so you are not locked into OpenAI:
+
+```python
+PromptClassifier(model="gpt-4o")             # OpenAI
+PromptClassifier(model="claude-sonnet-4-6")  # Anthropic
+PromptClassifier(model="ollama:llama3.1")    # local Ollama
+```
+
+API keys are read from the usual per-provider environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, …); local providers like Ollama need none.
+
+---
+
 ### 🕳 Zero-Example Learning
 
 If you call `.fit()` with no rows — just column names — `promptlearn` will still return a working model.
@@ -119,7 +133,7 @@ joblib.dump(model, "model.joblib")
 model = joblib.load("model.joblib")
 ```
 
-The LLM client is excluded from the saved file and re-initialized on load. The heuristic remains intact, interpretable, and ready to use.
+The compiled prediction function is excluded from the saved file and recompiled on load. The heuristic remains intact, interpretable, and ready to use.
 
 ---
 

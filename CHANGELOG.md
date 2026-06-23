@@ -5,6 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+### Added
+- Multi-provider LLM support via [litellm](https://github.com/BerriAI/litellm):
+  the `model` string now routes to OpenAI (`gpt-4o`), Anthropic
+  (`claude-sonnet-4-6`), or local Ollama (`ollama:llama3.1`) (#1)
+
+### Changed
+- Replaced the hardcoded OpenAI client with litellm; API keys are now resolved
+  lazily per-provider from the usual environment variables, so constructing an
+  estimator no longer requires `OPENAI_API_KEY`
+
+---
+
 ## [0.3.1] — 2026-06-22 — benchmark polish
 ### Changed
 - Benchmark output now highlights winning models per metric

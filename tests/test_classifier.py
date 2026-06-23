@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import joblib
 import os
-import sys
 import tempfile
 
 from promptlearn.classifier import PromptClassifier
@@ -107,23 +106,12 @@ def test_joblib_save_load(sample_Xy):
         assert len(preds) == len(y)
 
 
-def test_missing_api_key(monkeypatch):
-    # Remove env var and force reload
+def test_construction_does_not_require_api_key(monkeypatch):
+    """Credentials are resolved lazily per-provider by litellm at call time,
+    so constructing an estimator must not require any API key."""
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    import importlib
-    import promptlearn.base
-
-    importlib.reload(promptlearn.base)
-    with pytest.raises(RuntimeError):
-        PromptClassifier()
-
-
-def test_importerror_openai(monkeypatch):
-    """Test missing openai dependency error path."""
-    # Patch sys.modules to simulate openai missing
-    monkeypatch.setitem(sys.modules, "openai", None)
-    with pytest.raises(ImportError):
-        clf = PromptClassifier(model="gpt-4o")
+    clf = PromptClassifier()
+    assert clf.predict_fn is None
 
 
 def test_setstate_broken_code(monkeypatch):

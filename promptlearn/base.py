@@ -1,5 +1,4 @@
 import logging
-import os
 import warnings
 
 from typing import Callable, Optional
@@ -19,7 +18,6 @@ class BasePromptEstimator:
         self.model = model
         self.verbose = verbose
         self.max_train_rows = max_train_rows
-        self.llm_client = self._init_llm_client()
         self.predict_fn: Optional[Callable] = None
         self.target_name_: Optional[str] = None
         self.feature_names_: Optional[list] = None
@@ -41,35 +39,16 @@ class BasePromptEstimator:
             setattr(self, k, v)
         return self
 
-    def _init_llm_client(self):
-        try:
-            import openai
-        except ImportError:
-            raise ImportError(
-                "You must install the 'openai' package to use PromptEstimator classes."
-            )
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise RuntimeError(
-                "OPENAI_API_KEY environment variable must be set to use LLM models."
-            )
-        openai.api_key = api_key
-        return openai.OpenAI()
-
     # used by joblib
     def __getstate__(self):
         state = self.__dict__.copy()
-        state.pop("llm_client", None)  # Remove openai client on serialization
         state.pop("predict_fn", None)  # Remove predict_fn on serialization
         return state
 
     # used by joblib
     def __setstate__(self, state):
         self.__dict__.update(state)
-        self.llm_client = (
-            self._init_llm_client()
-        )  # Re-initialize LLM client on re-creation of object
-        # Now do any additional setup specific to this class
+        # Recompile the generated heuristic on re-creation of the object
         if getattr(self, "python_code_", None):
             try:
                 self.predict_fn = make_predict_fn(self.python_code_)
@@ -80,12 +59,23 @@ class BasePromptEstimator:
                 self.predict_fn = None
 
     def _call_llm(self, prompt: str) -> str:
-        """Call the language model, return the code as string."""
+        """Call the language model via litellm, return the response text.
+
+        The provider is selected by the model string, e.g. ``gpt-4o`` (OpenAI),
+        ``claude-sonnet-4-6`` (Anthropic), or ``ollama:llama3.1`` (local Ollama).
+        API keys are read from the usual per-provider environment variables.
+        """
+        import litellm
+
         if self.verbose:
             logger.info("[Prompt to LLM]\n%s", prompt)
+        # Accept the documented ``ollama:model`` syntax; litellm expects ``ollama/model``.
+        model = self.model
+        if model.startswith("ollama:"):
+            model = "ollama/" + model[len("ollama:") :]
         try:
-            response = self.llm_client.chat.completions.create(
-                model=self.model, messages=[{"role": "user", "content": prompt}]
+            response = litellm.completion(
+                model=model, messages=[{"role": "user", "content": prompt}]
             )
             content = str(response.choices[0].message.content).strip()
             if self.verbose:
