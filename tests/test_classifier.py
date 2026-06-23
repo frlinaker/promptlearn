@@ -114,6 +114,59 @@ def test_construction_does_not_require_api_key(monkeypatch):
     assert clf.predict_fn is None
 
 
+def test_fit_retries_then_succeeds(monkeypatch):
+    """A function that errors when run on the sample is retried, then accepted."""
+    clf = PromptClassifier(max_retries=2)
+    monkeypatch.setattr(clf, "_extend_code", lambda code: code)
+    outputs = iter(
+        [
+            "def predict(**features): raise ValueError('boom')",  # compiles, fails at run
+            "def predict(**features): return 0",  # valid
+        ]
+    )
+    monkeypatch.setattr(clf, "_call_llm", lambda prompt: next(outputs))
+    X = pd.DataFrame({"a": [1, 2, 3]})
+    y = pd.Series([0, 1, 0], name="target")
+    clf.fit(X, y)
+    assert clf.predict_fn is not None
+    assert clf.predict_fn(a=5) == 0
+
+
+def test_fit_feedback_includes_error(monkeypatch):
+    """The retry prompt carries the previous error message back to the LLM."""
+    clf = PromptClassifier(max_retries=1)
+    monkeypatch.setattr(clf, "_extend_code", lambda code: code)
+    prompts = []
+    outputs = iter(
+        [
+            "def predict(**features): raise ValueError('kaboom')",
+            "def predict(**features): return 1",
+        ]
+    )
+
+    def fake_llm(prompt):
+        prompts.append(prompt)
+        return next(outputs)
+
+    monkeypatch.setattr(clf, "_call_llm", fake_llm)
+    clf.fit(pd.DataFrame({"a": [1]}), pd.Series([1], name="target"))
+    assert len(prompts) == 2
+    assert "kaboom" in prompts[1]
+
+
+def test_fit_raises_after_exhausting_retries(monkeypatch):
+    """When every attempt fails validation, the last error is surfaced."""
+    clf = PromptClassifier(max_retries=1)
+    monkeypatch.setattr(clf, "_extend_code", lambda code: code)
+    monkeypatch.setattr(
+        clf,
+        "_call_llm",
+        lambda prompt: "def predict(**features): raise ValueError('always broken')",
+    )
+    with pytest.raises(ValueError, match="always broken"):
+        clf.fit(pd.DataFrame({"a": [1, 2]}), pd.Series([0, 1], name="target"))
+
+
 def test_setstate_broken_code(monkeypatch):
     """Test __setstate__ with broken python_code_ triggers warning and fallback."""
     clf = PromptClassifier()

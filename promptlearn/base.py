@@ -4,6 +4,7 @@ import warnings
 from typing import Callable, Optional
 
 from .utils import (
+    generate_feature_dicts,
     make_predict_fn,
     prepare_training_data,
     extract_python_code,
@@ -14,10 +15,17 @@ logger = logging.getLogger("promptlearn")
 
 
 class BasePromptEstimator:
-    def __init__(self, model: str, verbose: bool, max_train_rows: int):
+    def __init__(
+        self,
+        model: str,
+        verbose: bool,
+        max_train_rows: int,
+        max_retries: int = 2,
+    ):
         self.model = model
         self.verbose = verbose
         self.max_train_rows = max_train_rows
+        self.max_retries = max_retries
         self.predict_fn: Optional[Callable] = None
         self.target_name_: Optional[str] = None
         self.feature_names_: Optional[list] = None
@@ -31,6 +39,7 @@ class BasePromptEstimator:
             "model": self.model,
             "verbose": self.verbose,
             "max_train_rows": self.max_train_rows,
+            "max_retries": self.max_retries,
         }
 
     # used by GridSearchCV
@@ -99,32 +108,66 @@ class BasePromptEstimator:
 
         csv_data = sample_df.to_csv(index=False)
 
-        prompt = prompt.format(data=csv_data)
-        logger.info(f"[LLM Prompt]\n{prompt}")
+        base_prompt = prompt.format(data=csv_data)
+        logger.info(f"[LLM Prompt]\n{base_prompt}")
 
-        # Call LLM and get code
-        code = self._call_llm(prompt)
-        if not isinstance(code, str):
-            code = str(code)
-        logger.info(f"[LLM Output]\n{code}")
+        # Rows used to confirm the generated code actually runs (empty for zero-row fits).
+        validation_rows = (
+            list(
+                generate_feature_dicts(
+                    sample_df[self.feature_names_], self.feature_names_
+                )
+            )
+            if self.feature_names_
+            else []
+        )
 
-        # Remove markdown/code block if present (triple backticks)
-        code = extract_python_code(code)
-        if not code.strip():
-            logger.error("LLM output is empty after removing markdown/code block.")
-            raise ValueError("No code to exec from LLM output.")
+        feedback = ""
+        last_error: Optional[Exception] = None
+        # One initial attempt plus up to max_retries corrective re-tries.
+        for attempt in range(self.max_retries + 1):
+            code = self._call_llm(base_prompt + feedback)
+            if not isinstance(code, str):
+                code = str(code)
+            logger.info(f"[LLM Output]\n{code}")
 
-        print(f"the cleaned up code is: [START]{code}[END]")
-        self.raw_python_code_ = code
+            # Remove markdown/code block if present (triple backticks)
+            code = extract_python_code(code)
+            try:
+                if not code.strip():
+                    raise ValueError("No code to exec from LLM output.")
+                self.raw_python_code_ = code
+                extended_code = self._extend_code(code)
+                predict_fn = make_predict_fn(extended_code)
+                self._validate_predict_fn(predict_fn, validation_rows)
+            except Exception as e:
+                last_error = e
+                logger.warning(
+                    f"[Validation] Attempt {attempt + 1}/{self.max_retries + 1} failed: {e}"
+                )
+                feedback = (
+                    "\n\nThe Python function you previously returned failed validation "
+                    f"with this error:\n{e}\n\n"
+                    "Here is the code that failed:\n"
+                    f"{code}\n\n"
+                    "Fix the problem and return only the corrected, valid Python code."
+                )
+                continue
 
-        extended_code = self._extend_code(code)
-        self.python_code_ = extended_code
-        print(f"the extended code is: [START]{extended_code}[END]")
+            self.python_code_ = extended_code
+            self.predict_fn = predict_fn
+            return self
 
-        # Compile the code into a function
-        self.predict_fn = make_predict_fn(extended_code)
+        # Every attempt failed; surface the most recent error.
+        assert last_error is not None
+        raise last_error
 
-        return self
+    def _validate_predict_fn(self, predict_fn: Callable, rows: list) -> None:
+        """Run the compiled function over the training sample to confirm it
+        executes without raising. Any exception is treated as a validation
+        failure so ``_fit`` can retry with the error fed back to the LLM."""
+        for row in rows:
+            predict_fn(**row)
 
     def _extend_code(self, code: str) -> str:
         logger.info("[Post-Process] Expanding code via second LLM pass...")

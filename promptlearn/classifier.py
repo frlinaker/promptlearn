@@ -36,8 +36,19 @@ Data:
 
 
 class PromptClassifier(BasePromptEstimator):
-    def __init__(self, model="gpt-4o", verbose: bool = True, max_train_rows: int = 100):
-        super().__init__(model=model, verbose=verbose, max_train_rows=max_train_rows)
+    def __init__(
+        self,
+        model="gpt-4o",
+        verbose: bool = True,
+        max_train_rows: int = 100,
+        max_retries: int = 2,
+    ):
+        super().__init__(
+            model=model,
+            verbose=verbose,
+            max_train_rows=max_train_rows,
+            max_retries=max_retries,
+        )
 
     def fit(self, X, y) -> "PromptClassifier":
         return super()._fit(X, y, DEFAULT_CLASSIFICATION_PROMPT_TEMPLATE)
