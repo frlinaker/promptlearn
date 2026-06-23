@@ -122,6 +122,28 @@ This is useful for:
 
 ---
 
+### 🔎 Explain the Learned Rule
+
+Call `.explain()` to get a plain-English description of the heuristic the model
+learned — useful for interpretability reporting:
+
+```python
+>>> explanation = model.explain()
+>>> print(explanation)
+Predicts 1 (adult) when `age` is at least 18, otherwise 0.
+
+>>> explanation.features_used
+['age']
+```
+
+`explain()` returns an `Explanation` object with `meta` and `data` dicts (keys
+also reachable as attributes) that is JSON round-trippable via `to_json()` /
+`Explanation.from_json(...)`. A bare `explain()` describes the whole model
+(global, and cached so it's deterministic); passing a single row, `explain(X)`,
+describes that one prediction (local).
+
+---
+
 ### 💾 Save and Reload with `joblib`
 
 Like any scikit-learn model, `promptlearn` estimators can be serialized:

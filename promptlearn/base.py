@@ -1,8 +1,12 @@
 import logging
+import re
 import warnings
 
 from typing import Callable, Optional
 
+from sklearn.exceptions import NotFittedError
+
+from .explain import Explanation
 from .utils import (
     generate_feature_dicts,
     make_predict_fn,
@@ -31,6 +35,7 @@ class BasePromptEstimator:
         self.feature_names_: Optional[list] = None
         self.raw_python_code_: Optional[str] = None
         self.python_code_: Optional[str] = None
+        self.explanation_: Optional[Explanation] = None
 
     # used by GridSearchCV
     def get_params(self, deep=True):
@@ -96,6 +101,7 @@ class BasePromptEstimator:
 
     def _fit(self, X, y, prompt: str):
         data, self.feature_names_, self.target_name_ = prepare_training_data(X, y)
+        self.explanation_ = None  # invalidate any cached explanation from a prior fit
 
         # Use a small sample for LLM to avoid expensive calls
         if len(data) > self.max_train_rows:
@@ -208,3 +214,79 @@ class BasePromptEstimator:
         )
         text = self._call_llm(prompt)
         return parse_tsv(text)
+
+    def explain(self, X=None) -> Explanation:
+        """Return a plain-English explanation of the fitted heuristic.
+
+        With no argument, returns a **global** explanation of the rule the model
+        encodes (cached, so repeated calls are deterministic). Given a single-row
+        ``X``, returns a **local** explanation of that one prediction.
+        """
+        if not getattr(self, "python_code_", None):
+            raise NotFittedError("Call fit() before explain().")
+
+        features_used = self._features_used()
+
+        if X is not None:
+            instance = next(iter(generate_feature_dicts(X, self.feature_names_)), {})
+            summary = self._call_llm(self._local_explain_prompt(instance))
+            return Explanation(
+                meta=self._explanation_meta(["local"]),
+                data={
+                    "summary": summary.strip(),
+                    "features_used": features_used,
+                    "instance": instance,
+                },
+            )
+
+        # Global explanation is computed once and cached for determinism.
+        if self.explanation_ is None:
+            summary = self._call_llm(self._global_explain_prompt())
+            self.explanation_ = Explanation(
+                meta=self._explanation_meta(["global"]),
+                data={
+                    "summary": summary.strip(),
+                    "features_used": features_used,
+                    "code": self.python_code_,
+                },
+            )
+        return self.explanation_
+
+    def _explanation_meta(self, scope: list) -> dict:
+        # The generated Python heuristic is fully visible, so this is a whitebox
+        # explanation in the Alibi sense.
+        return {
+            "name": type(self).__name__,
+            "type": ["whitebox"],
+            "explanations": scope,
+            "params": self.get_params(),
+        }
+
+    def _features_used(self) -> list:
+        """Features the heuristic actually references — never invents new ones."""
+        names = self.feature_names_ or []
+        code = self.python_code_ or ""
+        used = [n for n in names if re.search(rf"\b{re.escape(n)}\b", code)]
+        return used or list(names)
+
+    def _global_explain_prompt(self) -> str:
+        return (
+            "You are documenting a trained model for an interpretability report. "
+            "Below is the Python function it uses to make predictions. In clear, "
+            "concise plain English, describe the rule it encodes: which input "
+            "features it uses and how they determine the output. Be faithful to "
+            "the code and do not mention features that are not present.\n\n"
+            f"Target: {self.target_name_}\n"
+            f"Features: {', '.join(self.feature_names_ or [])}\n\n"
+            f"{self.python_code_}"
+        )
+
+    def _local_explain_prompt(self, instance: dict) -> str:
+        return (
+            "Below is the Python function a trained model uses to make "
+            "predictions, followed by one specific input. In plain English, "
+            "explain why this particular input yields its prediction, referring "
+            "to the relevant feature values. Be faithful to the code.\n\n"
+            f"{self.python_code_}\n\n"
+            f"Input: {instance}"
+        )

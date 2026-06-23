@@ -13,6 +13,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Code validation with retry: `fit()` now runs the generated function over the
   training sample and, on failure, feeds the error back to the LLM and retries
   up to `max_retries` times (default 2) before raising (#2)
+- `explain()` method returning a plain-English `Explanation` of the fitted
+  heuristic. Bare `explain()` gives a cached, global explanation; `explain(X)`
+  gives a local explanation of a single prediction. The `Explanation` object
+  carries `meta`/`data` dicts (with attribute access) and is JSON
+  round-trippable; `explain()` on an unfitted estimator raises
+  `NotFittedError` (#3)
 
 ### Changed
 - Replaced the hardcoded OpenAI client with litellm; API keys are now resolved
