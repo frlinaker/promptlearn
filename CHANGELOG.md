@@ -20,10 +20,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   round-trippable; `explain()` on an unfitted estimator raises
   `NotFittedError` (#3)
 
+- `compare_models(models, X_train, y_train, X_test, y_test)` helper that fits
+  any mix of promptlearn and sklearn/XGBoost estimators on one dataset and
+  returns a side-by-side metrics table plus a row-by-row predictions table
+
 ### Changed
 - Replaced the hardcoded OpenAI client with litellm; API keys are now resolved
   lazily per-provider from the usual environment variables, so constructing an
   estimator no longer requires `OPENAI_API_KEY`
+- Consolidated the example benchmark scripts: `benchmark_classifier.py`,
+  `benchmark_regressor.py`, and `benchmark_models.py` are replaced by a single
+  `examples/compare_models.py` (built on `compare_models`); the noisy linear
+  example was merged into `examples/linear_regression.py` (`--noise` flag)
 
 ---
 

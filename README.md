@@ -15,7 +15,7 @@
 
 ### 📊 Outperforming Traditional Models with Built-In Knowledge
 
-Consider a simple binary classification task: predicting whether an [animal is a mammal](examples/benchmark_classifier.py) given things like its name, weight, and lifespan.
+Consider a simple binary classification task: predicting whether an [animal is a mammal](examples/compare_models.py) given things like its name, weight, and lifespan (`python examples/compare_models.py --dataset mammal`).
 
 Traditional models depend solely on the input features. But `promptlearn` models can use their internal understanding of zoology to form highly accurate rules, pulling in data about known mammals, and making that knowledge available in explicit reference tables for subsequent predictions.
 
@@ -36,7 +36,7 @@ This type of semantic generalization is a powerful advantage for LLM-backed mode
 
 ---
 
-Now compare performance on a regression task where the data contains samples of [objects falling from different heights, under different gravity](examples/benchmark_regressor.py). This is a classic physics problem, with a well-known equation:
+Now compare performance on a regression task where the data contains samples of [objects falling from different heights, under different gravity](examples/compare_models.py) (`python examples/compare_models.py --dataset fall`). This is a classic physics problem, with a well-known equation:
 
 ```
 fall_time_s = sqrt((2 * height_m) / gravity_mps2)
@@ -82,7 +82,13 @@ The [`examples/`](examples/) directory has runnable scripts. The Titanic example
 python examples/titanic_classifier.py --explain --dump artifacts/
 ```
 
-Run `python examples/titanic_classifier.py --help` for all flags (`--model`, `--examples`, `--verbose`, …).
+To compare promptlearn against classical models (scikit-learn, XGBoost) side by side — both summary metrics and row-by-row predictions — use:
+
+```bash
+python examples/compare_models.py --dataset mammal      # or: iris, titanic, diabetes, fall
+```
+
+This is powered by the reusable `promptlearn.compare_models(models, X_train, y_train, X_test, y_test)` helper, which works with any mix of promptlearn and sklearn/XGBoost estimators.
 
 ---
 
