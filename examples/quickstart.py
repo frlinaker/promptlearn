@@ -11,12 +11,21 @@ run anything. Pick how to run:
     python quickstart.py --all            # run EVERY demo (slow; many live LLM calls)
 
 More examples:
-    python quickstart.py --demo titanic --dump artifacts/
+    python quickstart.py --demo titanic --dump artifacts/   # save code + explanation + model
+    python quickstart.py --all --dump artifacts/             # run all, persist everything
     python quickstart.py --demo compare --dataset mammal --rows 8
     python quickstart.py --demo world_knowledge --model claude-sonnet-4-6
+
+--dump DIR persists, per demo, into DIR/<demo>/: the console output
+(output.txt), each fitted model's generated code (*.raw.py, *.extended.py),
+its plain-English explanation (*.explanation.txt), and the joblib model.
+
+Note: reasoning models like the default gpt-5.5 are slow; each fit makes two LLM
+calls. For a faster tour, add e.g. --model gpt-5.4-mini.
 """
 
 import argparse
+import contextlib
 import logging
 import os
 import sys
@@ -36,6 +45,63 @@ def banner(title):
 
 
 # --------------------------------------------------------------------------- #
+# Artifact persistence (--dump): save each demo's output, generated code,
+# explanation, and model. _DUMP_DIR is set by the runner while a demo runs.
+# --------------------------------------------------------------------------- #
+_DUMP_DIR = None
+
+
+class _Tee:
+    """Duplicate writes to several streams (console + a file) at once."""
+
+    def __init__(self, *streams):
+        self._streams = streams
+
+    def write(self, data):
+        for s in self._streams:
+            s.write(data)
+
+    def flush(self):
+        for s in self._streams:
+            s.flush()
+
+
+@contextlib.contextmanager
+def _tee_stdout(fileobj):
+    original = sys.stdout
+    sys.stdout = _Tee(original, fileobj)
+    try:
+        yield
+    finally:
+        sys.stdout = original
+
+
+def dump_model(est, label="model"):
+    """When --dump is active, persist a fitted promptlearn estimator into the
+    current demo's artifact dir: its raw and extended generated code, a
+    plain-English explanation, and the joblib model. A no-op otherwise."""
+    if not _DUMP_DIR:
+        return est
+    import joblib
+
+    base = os.path.join(_DUMP_DIR, label)
+    if getattr(est, "raw_python_code_", None):
+        Path(f"{base}.raw.py").write_text(est.raw_python_code_, encoding="utf-8")
+    if getattr(est, "python_code_", None):
+        Path(f"{base}.extended.py").write_text(est.python_code_, encoding="utf-8")
+    try:
+        Path(f"{base}.explanation.txt").write_text(
+            est.explain().summary, encoding="utf-8"
+        )
+    except Exception as e:  # explanation is best-effort; never fail the dump
+        Path(f"{base}.explanation.txt").write_text(
+            f"(explain failed: {e})", encoding="utf-8"
+        )
+    joblib.dump(est, f"{base}.joblib")
+    return est
+
+
+# --------------------------------------------------------------------------- #
 # Bite-size feature demos
 # --------------------------------------------------------------------------- #
 def demo_zero_row(args):
@@ -46,6 +112,7 @@ def demo_zero_row(args):
 
     clf = PromptClassifier(model=args.model, verbose=False)
     clf.fit(X, y)  # only headers — nothing to learn from but the names
+    dump_model(clf)
 
     for country, expected in [("Japan", "no"), ("France", "yes")]:
         pred = int(clf.predict(pd.DataFrame([{"country_name": country}]))[0])
@@ -59,6 +126,7 @@ def demo_sample(args):
 
     reg = PromptRegressor(model=args.model, verbose=False)
     reg.fit(X, y)
+    dump_model(reg)
     print(reg.sample(10).to_string(index=False))
 
 
@@ -72,6 +140,7 @@ def demo_joblib(args):
 
     reg = PromptRegressor(model=args.model, verbose=False)
     reg.fit(X, y)
+    dump_model(reg)
 
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "model.joblib"
@@ -90,6 +159,7 @@ def demo_linear(args):
 
     reg = PromptRegressor(model=args.model, verbose=False)
     reg.fit(X, y)
+    dump_model(reg)
 
     X_test = np.array([[4], [5], [6]])
     preds = reg.predict(X_test)
@@ -108,6 +178,7 @@ def demo_nonlinear(args):
 
     reg = PromptRegressor(model=args.model, verbose=False)
     reg.fit(X, y)
+    dump_model(reg)
 
     tests = pd.DataFrame(
         [
@@ -132,6 +203,7 @@ def demo_xor(args):
 
     clf = PromptClassifier(model=args.model, verbose=False)
     clf.fit(X, y)
+    dump_model(clf)
     preds = clf.predict(X)
     for inputs, pred, true in zip(X.tolist(), preds, y):
         mark = "ok" if int(pred) == int(true) else "WRONG"
@@ -150,6 +222,7 @@ def demo_world_knowledge(args):
     )
     clf = PromptClassifier(model=args.model, verbose=False)
     clf.fit(data[["country_name"]], data["has_blue_in_flag"])
+    dump_model(clf, "flag_classifier")
     for country in ["France", "Brazil", "Spain"]:
         pred = int(clf.predict(pd.DataFrame([{"country_name": country}]))[0])
         print(f"  {country}: {'blue' if pred else 'no blue'}")
@@ -160,6 +233,7 @@ def demo_world_knowledge(args):
     train = pd.DataFrame({"animal": ["chicken", "ant", "spider"], "money": [7, 21, 28]})
     reg = PromptRegressor(model=args.model, verbose=False)
     reg.fit(train[["animal"]], train["money"])
+    dump_model(reg, "money_regressor")
     for animal in ["dog", "bee", "crab"]:
         pred = float(reg.predict(pd.DataFrame([{"animal": animal}]))[0])
         print(f"  {animal}: {pred:.1f}")
@@ -177,6 +251,8 @@ def demo_multioutput(args):
 
     reg = MultiOutputRegressor(PromptRegressor(model=args.model, verbose=False))
     reg.fit(X, y)
+    for target, inner in zip(y.columns, reg.estimators_):
+        dump_model(inner, f"target_{target}")
     preds = pd.DataFrame(reg.predict(X.head()), columns=y.columns)
     print(preds.round(1).to_string(index=False))
 
@@ -196,6 +272,7 @@ def demo_gridsearch(args):
         cv=2,
     )
     search.fit(X, y)
+    dump_model(search.best_estimator_, "best_estimator")
     print(
         f"  best params: {search.best_params_}  best CV score: {search.best_score_:.3f}"
     )
@@ -223,6 +300,7 @@ def demo_large_dataset(args):
 
     clf = PromptClassifier(model=args.model, verbose=False, max_train_rows=n_rows)
     clf.fit(X_train, y_train)
+    dump_model(clf)
 
     X_eval, y_eval = X_test.head(40), y_test.head(40)
     acc = accuracy_score(y_eval, clf.predict(X_eval))
@@ -320,6 +398,10 @@ def demo_compare(args):
     metrics, predictions = compare_models(
         models, X_train, y_train, X_test, y_test, task
     )
+    # The promptlearn estimators are fitted in place; persist their heuristics.
+    for model_name, est in models.items():
+        if getattr(est, "python_code_", None):
+            dump_model(est, model_name.replace("/", "_"))
     primary, ascending = ("rmse", True) if task == "regression" else ("accuracy", False)
     metrics = metrics.sort_values(primary, ascending=ascending)
 
@@ -364,9 +446,8 @@ def _preprocess_titanic(df, target):
 
 def demo_titanic(args):
     """The deep tour: fit on Titanic, then show the generated predict() function
-    (the model *is* code), explain the rule globally and per-row, and optionally
-    dump the artifacts (--dump DIR)."""
-    import joblib
+    (the model *is* code), explain the rule globally and per-row. With --dump it
+    also persists the code/explanation/model (like every demo)."""
     from sklearn.metrics import accuracy_score, classification_report
     from sklearn.model_selection import train_test_split
 
@@ -379,6 +460,7 @@ def demo_titanic(args):
     )
     clf = PromptClassifier(model=args.model, verbose=args.verbose)
     clf.fit(X_train, y_train)
+    dump_model(clf)
 
     y_pred = clf.predict(X_val)
     banner(f"VALIDATION ACCURACY: {accuracy_score(y_val, y_pred):.4f}")
@@ -405,25 +487,6 @@ def demo_titanic(args):
         mark = "correct" if pred == actual else "WRONG"
         print(f"\n--- row {i}: predicted={pred}, actual={actual} ({mark}) ---")
         print(clf.explain(row).summary)
-
-    if args.dump is not None:
-        os.makedirs(args.dump, exist_ok=True)
-        artifacts = {
-            "titanic_raw.py": clf.raw_python_code_ or "",
-            "titanic_extended.py": clf.python_code_ or "",
-            "titanic_explanation.txt": clf.explain().summary,
-        }
-        written = []
-        for name, content in artifacts.items():
-            path = os.path.join(args.dump, name)
-            Path(path).write_text(content, encoding="utf-8")
-            written.append(path)
-        model_path = os.path.join(args.dump, "titanic_model.joblib")
-        joblib.dump(clf, model_path)
-        written.append(model_path)
-        banner("DUMPED ARTIFACTS")
-        for path in written:
-            print(" •", os.path.abspath(path))
 
 
 DEMOS = {
@@ -474,10 +537,11 @@ def build_parser():
     p.add_argument(
         "--dump",
         nargs="?",
-        const="titanic_artifacts",
+        const="artifacts",
         default=None,
         metavar="DIR",
-        help="For the 'titanic' demo: save generated code, explanation, and model to DIR.",
+        help="Persist each demo's output, generated code, explanation, and model "
+        "into DIR/<demo>/ (default DIR: artifacts).",
     )
     p.add_argument(
         "--verbose", action="store_true", help="Show LLM prompts during fit."
@@ -497,13 +561,31 @@ def _run_demo(name, args):
     """Run one demo and return (status, seconds). Never raises, so running the
     whole suite isn't aborted by a single failing demo (e.g. a flaky LLM call)."""
     banner(f"DEMO: {name}  (model={args.model})")
+    print("  running… (live LLM calls; a reasoning model can take a while per fit)\n")
+
+    global _DUMP_DIR
+    out_dir = None
+    if args.dump is not None:
+        out_dir = os.path.join(args.dump, name)
+        os.makedirs(out_dir, exist_ok=True)
+    _DUMP_DIR = out_dir
+
     start = time.time()
     try:
-        DEMOS[name](args)
+        if out_dir:
+            # Tee the demo's console output to a file alongside its artifacts.
+            with open(os.path.join(out_dir, "output.txt"), "w", encoding="utf-8") as f:
+                with _tee_stdout(f):
+                    DEMOS[name](args)
+            print(f"  ↳ artifacts saved to {os.path.abspath(out_dir)}")
+        else:
+            DEMOS[name](args)
         return "ok", time.time() - start
     except Exception:
         traceback.print_exc()
         return "FAILED", time.time() - start
+    finally:
+        _DUMP_DIR = None
 
 
 def main():
