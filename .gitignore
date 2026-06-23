@@ -53,3 +53,10 @@ runs/
 
 # Working docs and files
 scratch*
+
+# Environment variables
+.envrc
+.env
+
+# Cursor rules
+.cursorrules
