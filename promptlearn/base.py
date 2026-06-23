@@ -4,6 +4,7 @@ import warnings
 
 from typing import Callable, Optional
 
+from sklearn.base import BaseEstimator
 from sklearn.exceptions import NotFittedError
 
 from .explain import Explanation
@@ -18,7 +19,7 @@ from .utils import (
 logger = logging.getLogger("promptlearn")
 
 
-class BasePromptEstimator:
+class BasePromptEstimator(BaseEstimator):
     def __init__(
         self,
         model: str,

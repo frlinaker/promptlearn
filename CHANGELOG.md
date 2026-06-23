@@ -36,6 +36,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   parameters / missing data files / an external benchmark corpus, and is built
   on the reusable `compare_models` helper for the side-by-side benchmark
 
+### Fixed
+- scikit-learn ≥1.6 compatibility: the estimators now inherit `BaseEstimator`
+  (with `ClassifierMixin` / `RegressorMixin`), so they expose `__sklearn_tags__`
+  and once again work inside meta-estimators such as `GridSearchCV` and
+  `MultiOutputRegressor`, which previously raised `AttributeError`
+
 ---
 
 ## [0.3.1] — 2026-06-22 — benchmark polish

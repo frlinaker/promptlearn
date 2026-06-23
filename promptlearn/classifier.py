@@ -2,6 +2,8 @@ import logging
 import numpy as np
 import pandas as pd
 
+from sklearn.base import ClassifierMixin
+
 from .base import BasePromptEstimator
 from .utils import (
     generate_feature_dicts,
@@ -35,7 +37,7 @@ Data:
 """
 
 
-class PromptClassifier(BasePromptEstimator):
+class PromptClassifier(ClassifierMixin, BasePromptEstimator):
     def __init__(
         self,
         model="gpt-4o",

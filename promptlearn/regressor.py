@@ -2,6 +2,7 @@ import logging
 import numpy as np
 import pandas as pd
 
+from sklearn.base import RegressorMixin
 from sklearn.metrics import r2_score
 
 from .base import BasePromptEstimator
@@ -33,7 +34,7 @@ Data:
 """
 
 
-class PromptRegressor(BasePromptEstimator):
+class PromptRegressor(RegressorMixin, BasePromptEstimator):
     def __init__(
         self,
         model="gpt-4o",
