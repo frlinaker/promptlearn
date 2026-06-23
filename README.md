@@ -153,6 +153,22 @@ It is lightweight and NLP-focused.
 
 ---
 
+## 🛠 Development
+
+Install the dev dependencies and enable the git hooks:
+
+```bash
+pip install -r requirements-dev.txt
+pre-commit install
+```
+
+The pre-commit hooks run [black](https://github.com/psf/black) and the full
+test suite, and both must pass before a commit is allowed. Note the test suite
+makes live LLM calls, so it needs a provider API key (e.g. `OPENAI_API_KEY`).
+Bypass the hooks in an emergency with `git commit --no-verify`.
+
+---
+
 ## 📁 License
 
 MIT © 2025 Fredrik Linaker
