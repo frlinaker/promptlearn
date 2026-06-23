@@ -76,7 +76,7 @@ class BasePromptEstimator(BaseEstimator):
     def _call_llm(self, prompt: str) -> str:
         """Call the language model via litellm, return the response text.
 
-        The provider is selected by the model string, e.g. ``gpt-4o`` (OpenAI),
+        The provider is selected by the model string, e.g. ``gpt-5.5`` (OpenAI),
         ``claude-sonnet-4-6`` (Anthropic), or ``ollama:llama3.1`` (local Ollama).
         API keys are read from the usual per-provider environment variables.
         """

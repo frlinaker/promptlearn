@@ -40,7 +40,7 @@ Data:
 class PromptClassifier(ClassifierMixin, BasePromptEstimator):
     def __init__(
         self,
-        model="gpt-4o",
+        model="gpt-5.5",
         verbose: bool = True,
         max_train_rows: int = 100,
         max_retries: int = 2,

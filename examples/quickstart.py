@@ -462,8 +462,8 @@ def parse_args():
     p.add_argument("--list", action="store_true", help="List demos and exit.")
     p.add_argument(
         "--model",
-        default="gpt-4o",
-        help="LLM model string (e.g. gpt-4o, claude-sonnet-4-6, ollama:llama3.1).",
+        default="gpt-5.5",
+        help="LLM model string (e.g. gpt-5.5, claude-sonnet-4-6, ollama:llama3.1).",
     )
     p.add_argument(
         "--dataset",

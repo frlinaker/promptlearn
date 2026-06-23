@@ -96,7 +96,7 @@ The `compare` demo is powered by the reusable `promptlearn.compare_models(models
 The LLM provider is selected by the `model` string and resolved via [LiteLLM](https://github.com/BerriAI/litellm), so you are not locked into OpenAI:
 
 ```python
-PromptClassifier(model="gpt-4o")             # OpenAI
+PromptClassifier(model="gpt-5.5")            # OpenAI (the default)
 PromptClassifier(model="claude-sonnet-4-6")  # Anthropic
 PromptClassifier(model="ollama:llama3.1")    # local Ollama
 ```
