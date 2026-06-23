@@ -15,7 +15,7 @@
 
 ### 📊 Outperforming Traditional Models with Built-In Knowledge
 
-Consider a simple binary classification task: predicting whether an [animal is a mammal](examples/compare_models.py) given things like its name, weight, and lifespan (`python examples/compare_models.py --dataset mammal`).
+Consider a simple binary classification task: predicting whether an [animal is a mammal](examples/quickstart.py) given things like its name, weight, and lifespan (`python examples/quickstart.py --demo compare --dataset mammal`).
 
 Traditional models depend solely on the input features. But `promptlearn` models can use their internal understanding of zoology to form highly accurate rules, pulling in data about known mammals, and making that knowledge available in explicit reference tables for subsequent predictions.
 
@@ -36,7 +36,7 @@ This type of semantic generalization is a powerful advantage for LLM-backed mode
 
 ---
 
-Now compare performance on a regression task where the data contains samples of [objects falling from different heights, under different gravity](examples/compare_models.py) (`python examples/compare_models.py --dataset fall`). This is a classic physics problem, with a well-known equation:
+Now compare performance on a regression task where the data contains samples of [objects falling from different heights, under different gravity](examples/quickstart.py) (`python examples/quickstart.py --demo compare --dataset fall`). This is a classic physics problem, with a well-known equation:
 
 ```
 fall_time_s = sqrt((2 * height_m) / gravity_mps2)
@@ -76,26 +76,18 @@ These estimators follow the same API as other `scikit-learn` models (`fit`, `pre
 
 ### 🚀 Try It
 
-The [`examples/`](examples/) directory has runnable scripts. The Titanic example is a good guided tour — it fits a classifier, prints the generated `predict()` function, explains the learned rule, and can save the artifacts:
+Everything runnable lives in a single guided tour, [`examples/quickstart.py`](examples/quickstart.py) — a menu of self-contained demos. Each makes live LLM calls, so run them one at a time:
 
 ```bash
-python examples/titanic_classifier.py --explain --dump artifacts/
+python examples/quickstart.py --list             # see all the demos
+python examples/quickstart.py --demo zero_row     # fit on column names only
+python examples/quickstart.py --demo titanic --dump artifacts/   # deep tour: generated code, explain(), joblib
+python examples/quickstart.py --demo compare --dataset mammal    # promptlearn vs sklearn/XGBoost
 ```
 
-To compare promptlearn against classical models (scikit-learn, XGBoost) side by side — both summary metrics and row-by-row predictions — use:
+The demos cover zero-row fitting, `.sample()`, joblib round-tripping, world-knowledge reasoning, linear/nonlinear/multi-output regression, XOR, `GridSearchCV` tuning, a large real OpenML dataset, the side-by-side model `compare`, and the deep `titanic` walkthrough (generated `predict()` code, `explain()`, and artifact dumping).
 
-```bash
-python examples/compare_models.py --dataset mammal      # or: iris, titanic, diabetes, fall
-```
-
-This is powered by the reusable `promptlearn.compare_models(models, X_train, y_train, X_test, y_test)` helper, which works with any mix of promptlearn and sklearn/XGBoost estimators.
-
-For a quick tour of the headline features — zero-row fitting, `.sample()`, joblib round-tripping, world-knowledge reasoning, nonlinear/multi-output regression, and `GridSearchCV` tuning — each as a small self-contained demo:
-
-```bash
-python examples/quickstart.py --list           # see the demos
-python examples/quickstart.py --demo zero_row   # run one (they make live LLM calls)
-```
+The `compare` demo is powered by the reusable `promptlearn.compare_models(models, X_train, y_train, X_test, y_test)` helper, which works with any mix of promptlearn and sklearn/XGBoost estimators.
 
 ---
 
