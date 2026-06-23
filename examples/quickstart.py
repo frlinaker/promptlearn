@@ -1,28 +1,19 @@
 #!/usr/bin/env python
 """A guided tour of promptlearn, as a menu of self-contained demos.
 
-Every demo makes live LLM calls, so run them one at a time with --demo to keep
-cost down (running with no --demo executes all of them, which is slow/expensive):
+Every demo makes live LLM calls, so they cost real API usage. Running this
+script with no arguments just prints this help and the demo list — it does not
+run anything. Pick how to run:
 
-    python quickstart.py --list                 # see the demos
-    python quickstart.py --demo zero_row
+    python quickstart.py                  # show this help + the demo list (runs nothing)
+    python quickstart.py --list           # print just the demo names + summaries
+    python quickstart.py --demo zero_row  # run ONE demo (cheap, recommended)
+    python quickstart.py --all            # run EVERY demo (slow; many live LLM calls)
+
+More examples:
     python quickstart.py --demo titanic --dump artifacts/
     python quickstart.py --demo compare --dataset mammal --rows 8
     python quickstart.py --demo world_knowledge --model claude-sonnet-4-6
-
-Demos, roughly easiest first:
-    zero_row         fit on column names only — no rows
-    sample           generate synthetic rows with .sample()
-    joblib           serialize/reload a fitted model
-    linear           recover y = 2x + 3
-    nonlinear        recover y = 3*length^2 + 2*volume + 5
-    xor              learn XOR logic
-    world_knowledge  fold in real-world knowledge (flags, a riddle)
-    multioutput      wrap in sklearn's MultiOutputRegressor
-    gridsearch       tune hyper-parameters with GridSearchCV
-    large_dataset    a real OpenML dataset, with max_train_rows bounding cost
-    compare          benchmark promptlearn vs sklearn/XGBoost side by side
-    titanic          the deep tour: generated code, explain(), joblib
 """
 
 import argparse
@@ -451,15 +442,18 @@ DEMOS = {
 }
 
 
-def parse_args():
+def build_parser():
     p = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    p.add_argument("--demo", choices=list(DEMOS), help="Run a single demo.")
     p.add_argument(
-        "--demo", choices=list(DEMOS), help="Run a single demo (default: run all)."
+        "--all",
+        action="store_true",
+        help="Run every demo in one go (slow; many live LLM calls).",
     )
-    p.add_argument("--list", action="store_true", help="List demos and exit.")
+    p.add_argument("--list", action="store_true", help="Print the demo list and exit.")
     p.add_argument(
         "--model",
         default="gpt-5.5",
@@ -488,7 +482,15 @@ def parse_args():
     p.add_argument(
         "--verbose", action="store_true", help="Show LLM prompts during fit."
     )
-    return p.parse_args()
+    return p
+
+
+def _print_demo_list():
+    print("\nDemos (run one with --demo NAME, or all with --all):\n")
+    for name, fn in DEMOS.items():
+        lines = (fn.__doc__ or "").strip().splitlines()
+        summary = lines[0] if lines else ""
+        print(f"  {name:16} {summary}")
 
 
 def _run_demo(name, args):
@@ -505,20 +507,29 @@ def _run_demo(name, args):
 
 
 def main():
-    args = parse_args()
+    parser = build_parser()
+    args = parser.parse_args()
+
     if args.list:
-        for name, fn in DEMOS.items():
-            summary = (fn.__doc__ or "").strip().splitlines()[0]
-            print(f"  {name:16} {summary}")
+        _print_demo_list()
+        return
+
+    if args.demo:
+        selected = [args.demo]
+    elif args.all:
+        selected = list(DEMOS)
+    else:
+        # No demo requested: show how to run things and execute nothing.
+        parser.print_help()
+        _print_demo_list()
         return
 
     if args.verbose:
         logging.basicConfig(level=logging.INFO)
 
-    selected = [args.demo] if args.demo else list(DEMOS)
     results = [(name, *_run_demo(name, args)) for name in selected]
 
-    # Summarise when running more than one demo (i.e. the full --demo-less run).
+    # Summarise whenever more than one demo ran (i.e. the --all run).
     if len(results) > 1:
         banner("SUMMARY")
         for name, status, secs in results:
