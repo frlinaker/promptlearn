@@ -90,6 +90,13 @@ python examples/compare_models.py --dataset mammal      # or: iris, titanic, dia
 
 This is powered by the reusable `promptlearn.compare_models(models, X_train, y_train, X_test, y_test)` helper, which works with any mix of promptlearn and sklearn/XGBoost estimators.
 
+For a quick tour of the headline features — zero-row fitting, `.sample()`, joblib round-tripping, world-knowledge reasoning, nonlinear/multi-output regression, and `GridSearchCV` tuning — each as a small self-contained demo:
+
+```bash
+python examples/quickstart.py --list           # see the demos
+python examples/quickstart.py --demo zero_row   # run one (they make live LLM calls)
+```
+
 ---
 
 ### 🔌 Choose Your Provider

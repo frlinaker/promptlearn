@@ -32,6 +32,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `benchmark_regressor.py`, and `benchmark_models.py` are replaced by a single
   `examples/compare_models.py` (built on `compare_models`); the noisy linear
   example was merged into `examples/linear_regression.py` (`--noise` flag)
+- Consolidated the remaining `examples/`: the many single-feature scripts are
+  folded into one `examples/quickstart.py` (`--demo` selector), and broken or
+  orphaned scripts (relying on removed parameters, missing data files, or an
+  external benchmark corpus) were removed. The directory now holds four
+  scripts: `quickstart.py`, `compare_models.py`, `titanic_classifier.py`, and
+  `linear_regression.py`
 
 ---
 
