@@ -20,8 +20,8 @@ More examples:
 (output.txt), each fitted model's generated code (*.raw.py, *.extended.py),
 its plain-English explanation (*.explanation.txt), and the joblib model.
 
-Note: each fit makes two LLM calls. The default gpt-5.4-mini is fast and cheap;
-for higher-quality heuristics try a stronger (slower) model, e.g. --model gpt-5.5.
+Note: each fit makes two LLM calls. The default gpt-5.5 gives the best
+heuristics but is slow/expensive; for a fast, cheap tour use --model gpt-5.4-mini.
 """
 
 import argparse
@@ -519,8 +519,8 @@ def build_parser():
     p.add_argument("--list", action="store_true", help="Print the demo list and exit.")
     p.add_argument(
         "--model",
-        default="gpt-5.4-mini",
-        help="LLM model string (e.g. gpt-5.4-mini, gpt-5.5, claude-sonnet-4-6, ollama:llama3.1).",
+        default="gpt-5.5",
+        help="LLM model string (e.g. gpt-5.5, gpt-5.4-mini, claude-sonnet-4-6, ollama:llama3.1).",
     )
     p.add_argument(
         "--dataset",
@@ -560,7 +560,7 @@ def _print_demo_list():
 def _run_demo(name, args):
     """Run one demo and return (status, seconds). Never raises, so running the
     whole suite isn't aborted by a single failing demo (e.g. a flaky LLM call)."""
-    banner(f"DATASET: {name}  (model={args.model})")
+    banner(f"SCENARIO: {name}  (model={args.model})")
     print("  running… (live LLM calls; a reasoning model can take a while per fit)\n")
 
     global _DUMP_DIR

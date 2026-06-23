@@ -8,7 +8,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 ### Added
 - Multi-provider LLM support via [litellm](https://github.com/BerriAI/litellm):
-  the `model` string now routes to OpenAI (`gpt-5.4-mini`), Anthropic
+  the `model` string now routes to OpenAI (`gpt-5.5`), Anthropic
   (`claude-sonnet-4-6`), or local Ollama (`ollama:llama3.1`) (#1)
 - Code validation with retry: `fit()` now runs the generated function over the
   training sample and, on failure, feeds the error back to the LLM and retries
