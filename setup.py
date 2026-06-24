@@ -15,7 +15,7 @@ setup(
     author_email="fredrik.linaker@gmail.com",
     url="https://github.com/frlinaker/promptlearn",
     license="MIT",
-    packages=find_packages(),
+    packages=find_packages(exclude=["tests", "tests.*", "examples", "examples.*"]),
     install_requires=["scikit-learn", "litellm", "pandas", "numpy", "joblib"],
     python_requires=">=3.8",
     include_package_data=True,
