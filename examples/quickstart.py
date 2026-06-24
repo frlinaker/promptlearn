@@ -37,7 +37,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from promptlearn import PromptClassifier, PromptRegressor, compare_models
+from promptlearn import (
+    PromptClassifier,
+    PromptRegressor,
+    PromptFeatureEngineer,
+    compare_models,
+)
 
 
 def banner(title):
@@ -237,6 +242,58 @@ def demo_world_knowledge(args):
     for animal in ["dog", "bee", "crab"]:
         pred = float(reg.predict(pd.DataFrame([{"animal": animal}]))[0])
         print(f"  {animal}: {pred:.1f}")
+
+
+def demo_feature_engineer(args):
+    """PromptFeatureEngineer writes feature code from world knowledge, so a
+    plain LogisticRegression can use signal the raw column doesn't expose."""
+    from sklearn.compose import ColumnTransformer, make_column_selector as selector
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.pipeline import Pipeline
+    from sklearn.preprocessing import OneHotEncoder
+
+    # Predict whether a country is tropical — purely from its name.
+    df = pd.DataFrame(
+        {
+            "country": [
+                "Brazil",
+                "Indonesia",
+                "Kenya",
+                "Norway",
+                "Canada",
+                "Russia",
+                "Colombia",
+                "Sweden",
+                "Thailand",
+                "Finland",
+            ],
+            "tropical": [1, 1, 1, 0, 0, 0, 1, 0, 1, 0],
+        }
+    )
+    X, y = df[["country"]], df["tropical"]
+
+    fe = PromptFeatureEngineer(model=args.model, verbose=False)
+    encode = ColumnTransformer(
+        [
+            (
+                "cat",
+                OneHotEncoder(handle_unknown="ignore"),
+                selector(dtype_exclude="number"),
+            )
+        ],
+        remainder="passthrough",
+    )
+    pipe = Pipeline(
+        [
+            ("features", fe),
+            ("encode", encode),
+            ("model", LogisticRegression(max_iter=1000)),
+        ]
+    )
+    pipe.fit(X, y)
+    dump_model(fe, "feature_engineer")
+    print(f"  engineered features: {fe.new_feature_names_}")
+    print(f"  train accuracy: {pipe.score(X, y):.3f}")
 
 
 def demo_multioutput(args):
@@ -497,6 +554,7 @@ DEMOS = {
     "nonlinear": demo_nonlinear,
     "xor": demo_xor,
     "world_knowledge": demo_world_knowledge,
+    "feature_engineer": demo_feature_engineer,
     "multioutput": demo_multioutput,
     "gridsearch": demo_gridsearch,
     "large_dataset": demo_large_dataset,

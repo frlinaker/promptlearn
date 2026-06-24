@@ -1,24 +1,14 @@
 # Roadmap
 
-Current stable release: **v0.4.1**
+Current stable release: **v0.5.0**
 
 Released versions are documented in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
-## [v0.5.0] — feature engineering + benchmarks
-Widens the surface area and builds the credibility case.
-
-- [ ] Add `PromptFeatureEngineer` transformer — sklearn preprocessing step that
-      uses the LLM to generate new features from semantically meaningful columns
-      before a downstream classical model
-- [ ] Benchmark suite across 10+ OpenML datasets with semantically meaningful
-      categoricals — compare promptlearn, scikit-LLM, TabPFN, XGBoost, logistic
-      regression. Publish results in README.
-
----
-
-## [v0.6.0] — usability
+## [v0.6.0] — more baselines + usability
+- [ ] Add TabPFN and scikit-LLM as optional benchmark baselines (kept out of
+      core deps); the v0.5.0 suite ships XGBoost + logistic regression
 - [ ] CLI entry point: `promptlearn fit mydata.csv --target col`
 - [ ] `uncertainty` / `confidence` flag on generated code for zero-shot fits
 

@@ -69,8 +69,39 @@ These results highlight the practical benefit of reasoning models: they learn co
 
 - **`PromptClassifier`** – for predicting classes through generalized reasoning
 - **`PromptRegressor`** – for modeling numeric relationships in data
+- **`PromptFeatureEngineer`** – a transformer that derives new, world-knowledge-rich features for a downstream classical model
 
 These estimators follow the same API as other `scikit-learn` models (`fit`, `predict`, `score`) but operate via dynamic prompt construction and few-shot abstraction.
+
+---
+
+### 🧪 LLM Feature Engineering (`PromptFeatureEngineer`)
+
+`PromptFeatureEngineer` is a scikit-learn transformer that, at `fit`, asks the LLM to write a standalone `transform()` function deriving new features from semantically meaningful columns (e.g. mapping a country to its GDP tier, parsing a date into `is_weekend`, bucketing ages). At `transform` it just runs that generated code — **no per-row LLM calls** — and appends the engineered columns, so it drops straight into a `Pipeline` before any classical model:
+
+```python
+from sklearn.compose import ColumnTransformer, make_column_selector as selector
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder
+from promptlearn import PromptFeatureEngineer
+
+# PromptFeatureEngineer appends engineered columns to the original frame, so a
+# downstream linear model still wants categoricals one-hot encoded.
+encode = ColumnTransformer(
+    [("cat", OneHotEncoder(handle_unknown="ignore"), selector(dtype_exclude="number"))],
+    remainder="passthrough",
+)
+pipe = Pipeline([
+    ("features", PromptFeatureEngineer()),  # LLM-generated feature code
+    ("encode", encode),
+    ("model", LogisticRegression(max_iter=1000)),
+])
+pipe.fit(X_train, y_train)
+pipe.predict(X_test)
+```
+
+This lets a fast, interpretable linear model benefit from the LLM's world knowledge while keeping inference cheap and serializable.
 
 ---
 
@@ -88,6 +119,28 @@ python examples/quickstart.py --demo compare --dataset mammal    # promptlearn v
 The demos cover zero-row fitting, `.sample()`, joblib round-tripping, world-knowledge reasoning, linear/nonlinear/multi-output regression, XOR, `GridSearchCV` tuning, a large real OpenML dataset, the side-by-side model `compare`, and the deep `titanic` walkthrough (generated `predict()` code, `explain()`, and artifact dumping).
 
 The `compare` demo is powered by the reusable `promptlearn.compare_models(models, X_train, y_train, X_test, y_test)` helper, which works with any mix of promptlearn and sklearn/XGBoost estimators.
+
+---
+
+### 📈 Benchmark: feature engineering across 10 OpenML datasets
+
+Accuracy on a held-out test split for 10 OpenML classification datasets with semantically meaningful categoricals. `promptlearn+FE` is `PromptFeatureEngineer → one-hot → LogisticRegression`; the promptlearn contenders use `gpt-5.4-mini`. Reproduce with [`benchmarks/run_openml_benchmark.py`](benchmarks/run_openml_benchmark.py).
+
+| dataset | promptlearn | promptlearn+FE | logreg | xgboost |
+| --- | ---: | ---: | ---: | ---: |
+| adult | 0.782 | 0.858 | 0.864 | 0.850 |
+| credit-g | 0.680 | 0.748 | 0.724 | 0.728 |
+| bank-marketing | 0.678 | 0.876 | 0.868 | 0.878 |
+| mushroom | 0.970 | 1.000 | 1.000 | 1.000 |
+| car | 0.417 | 0.963 | 0.910 | 0.988 |
+| nursery | 0.492 | 0.944 | 0.932 | 0.974 |
+| vote | 0.193 | 0.945 | 0.954 | 0.982 |
+| tic-tac-toe | 0.979 | 1.000 | 0.979 | 0.983 |
+| kr-vs-kp | 0.598 | 0.966 | 0.964 | 0.992 |
+| monks-2 | 0.616 | 0.623 | 0.583 | 0.874 |
+| **mean** | **0.640** | **0.892** | **0.878** | **0.925** |
+
+**Takeaway:** adding `PromptFeatureEngineer` in front of a plain logistic regression lifts mean accuracy from 0.878 to **0.892** — beating logistic regression on most datasets and even edging out XGBoost on `adult`, `credit-g`, and `tic-tac-toe`, while keeping a fully interpretable linear model and cheap inference. Using the LLM as a *direct* classifier (`promptlearn` alone) is weaker here: when the target's class encoding is arbitrary (e.g. party labels in `vote`), direct prediction has no semantic foothold, which is exactly the gap feature engineering closes.
 
 ---
 

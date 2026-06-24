@@ -5,6 +5,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.5.0] — 2026-06-23 — feature engineering & benchmarks
+### Added
+- `PromptFeatureEngineer`: a scikit-learn `TransformerMixin` that uses the LLM
+  to generate a standalone `transform()` function deriving new, world-knowledge-
+  rich features from semantically meaningful columns. It validates/retries the
+  generated code like the estimators, makes no per-row LLM calls, appends the
+  engineered columns, and drops into a `Pipeline` before any classical model
+- Benchmark harness (`benchmarks/run_openml_benchmark.py`) comparing promptlearn,
+  promptlearn + feature engineering, logistic regression, and XGBoost across 10
+  OpenML datasets, with a JSON results cache. Results published in the README:
+  `PromptFeatureEngineer` + logistic regression reaches 0.892 mean accuracy
+  (vs 0.878 for plain logistic regression), beating XGBoost on several datasets
+
+### Changed
+- Extracted the code-generation + validation/retry loop into
+  `BasePromptEstimator._generate_code`, now shared by the estimators and the
+  feature engineer; `make_predict_fn` resolves a `predict` or `transform` entry
+  point
+- `compare_models` passes pre-built `Pipeline` instances through untouched, so a
+  feature-engineering pipeline isn't re-wrapped in the one-hot encoder
+
+---
+
 ## [0.4.1] — 2026-06-23 — packaging & test ergonomics
 ### Added
 - `PROMPTLEARN_MODEL` environment variable to override the default model
