@@ -1,20 +1,8 @@
 # Roadmap
 
-Current stable release: **v0.3.1**
+Current stable release: **v0.4.0**
 
 Released versions are documented in [CHANGELOG.md](CHANGELOG.md).
-
----
-
-## [v0.4.0] — multi-provider + reliability
-The most important release. Removes the OpenAI lock-in and makes the
-code-generation step production-safe.
-
-- [ ] Add Anthropic Claude provider (`model="claude-sonnet-4-6"`)
-- [ ] Add Ollama provider for local models (`model="ollama:llama3.1"`)
-- [ ] Add code validation sandbox — run generated code on a held-out sample
-      before `fit()` returns, retry up to N times on failure
-- [ ] Add `explain()` method — plain English description of the generated heuristic
 
 ---
 

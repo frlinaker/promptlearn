@@ -5,7 +5,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [Unreleased]
+## [0.4.0] — 2026-06-23 — multi-provider, reliability & explainability
 ### Added
 - Multi-provider LLM support via [litellm](https://github.com/BerriAI/litellm):
   the `model` string now routes to OpenAI (`gpt-5.5`), Anthropic
