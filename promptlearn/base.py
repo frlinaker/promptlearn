@@ -146,6 +146,23 @@ class BasePromptEstimator(BaseEstimator):
             else []
         )
 
+        raw_code, extended_code, predict_fn = self._generate_code(
+            base_prompt, validation_rows
+        )
+        self.raw_python_code_ = raw_code
+        self.python_code_ = extended_code
+        self.predict_fn = predict_fn
+        return self
+
+    def _generate_code(self, base_prompt: str, validation_rows: list):
+        """Generate code from the LLM with a validation-and-retry loop.
+
+        Returns ``(raw_code, extended_code, fn)``. Each attempt compiles the
+        code and runs ``_validate_predict_fn`` over the sample rows; any failure
+        triggers a retry with the error fed back to the LLM. Subclasses can
+        override ``_validate_predict_fn`` to add stricter checks. Raises the last
+        error if every attempt (one initial plus ``max_retries``) fails.
+        """
         feedback = ""
         last_error: Optional[Exception] = None
         # One initial attempt plus up to max_retries corrective re-tries.
@@ -160,10 +177,10 @@ class BasePromptEstimator(BaseEstimator):
             try:
                 if not code.strip():
                     raise ValueError("No code to exec from LLM output.")
-                self.raw_python_code_ = code
+                raw_code = code
                 extended_code = self._extend_code(code)
-                predict_fn = make_predict_fn(extended_code)
-                self._validate_predict_fn(predict_fn, validation_rows)
+                fn = make_predict_fn(extended_code)
+                self._validate_predict_fn(fn, validation_rows)
             except Exception as e:
                 last_error = e
                 logger.warning(
@@ -178,9 +195,7 @@ class BasePromptEstimator(BaseEstimator):
                 )
                 continue
 
-            self.python_code_ = extended_code
-            self.predict_fn = predict_fn
-            return self
+            return raw_code, extended_code, fn
 
         # Every attempt failed; surface the most recent error.
         assert last_error is not None

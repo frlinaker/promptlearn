@@ -32,6 +32,7 @@ ALLOWED_STATE_FIELDS = {
     "raw_python_code_",
     "python_code_",
     "explanation_",
+    "new_feature_names_",  # PromptFeatureEngineer
 }
 
 
