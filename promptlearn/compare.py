@@ -98,7 +98,13 @@ def compare_models(models, X_train, y_train, X_test, y_test, task=None):
 
     for name, estimator in models.items():
         is_prompt = isinstance(estimator, BasePromptEstimator)
-        model = estimator if is_prompt else _wrap_for_sklearn(estimator, X_train)
+        # promptlearn estimators and pre-built Pipelines (e.g. a
+        # PromptFeatureEngineer + classifier) accept the raw DataFrame as-is;
+        # only bare sklearn/xgboost estimators get the one-hot wrapper.
+        if is_prompt or isinstance(estimator, Pipeline):
+            model = estimator
+        else:
+            model = _wrap_for_sklearn(estimator, X_train)
 
         row = {"model": name}
         try:
