@@ -15,8 +15,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Benchmark harness (`benchmarks/run_openml_benchmark.py`) comparing promptlearn,
   promptlearn + feature engineering, logistic regression, and XGBoost across 10
   OpenML datasets, with a JSON results cache. Results published in the README:
-  `PromptFeatureEngineer` + logistic regression reaches 0.892 mean accuracy
-  (vs 0.878 for plain logistic regression), beating XGBoost on several datasets
+  on `gpt-5.5`, `PromptFeatureEngineer` + logistic regression reaches 0.937 mean
+  accuracy — ahead of XGBoost (0.925) and plain logistic regression (0.878)
 
 ### Changed
 - Extracted the code-generation + validation/retry loop into

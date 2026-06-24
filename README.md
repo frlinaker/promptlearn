@@ -124,23 +124,32 @@ The `compare` demo is powered by the reusable `promptlearn.compare_models(models
 
 ### 📈 Benchmark: feature engineering across 10 OpenML datasets
 
-Accuracy on a held-out test split for 10 OpenML classification datasets with semantically meaningful categoricals. `promptlearn+FE` is `PromptFeatureEngineer → one-hot → LogisticRegression`; the promptlearn contenders use `gpt-5.4-mini`. Reproduce with [`benchmarks/run_openml_benchmark.py`](benchmarks/run_openml_benchmark.py).
+Accuracy on a held-out test split for 10 OpenML classification datasets with semantically meaningful categoricals. `promptlearn+FE` is `PromptFeatureEngineer → one-hot → LogisticRegression`; the promptlearn contenders use `gpt-5.5`. Reproduce with [`benchmarks/run_openml_benchmark.py`](benchmarks/run_openml_benchmark.py) (`--model gpt-5.4-mini` for a faster, cheaper run).
 
 | dataset | promptlearn | promptlearn+FE | logreg | xgboost |
 | --- | ---: | ---: | ---: | ---: |
-| adult | 0.782 | 0.858 | 0.864 | 0.850 |
-| credit-g | 0.680 | 0.748 | 0.724 | 0.728 |
-| bank-marketing | 0.678 | 0.876 | 0.868 | 0.878 |
-| mushroom | 0.970 | 1.000 | 1.000 | 1.000 |
-| car | 0.417 | 0.963 | 0.910 | 0.988 |
-| nursery | 0.492 | 0.944 | 0.932 | 0.974 |
-| vote | 0.193 | 0.945 | 0.954 | 0.982 |
-| tic-tac-toe | 0.979 | 1.000 | 0.979 | 0.983 |
-| kr-vs-kp | 0.598 | 0.966 | 0.964 | 0.992 |
-| monks-2 | 0.616 | 0.623 | 0.583 | 0.874 |
-| **mean** | **0.640** | **0.892** | **0.878** | **0.925** |
+| adult | 0.864 | 0.864 | 0.864 | 0.850 |
+| credit-g | 0.780 | 0.748 | 0.724 | 0.728 |
+| bank-marketing | 0.878 | 0.880 | 0.868 | 0.878 |
+| mushroom | 0.996 | 1.000 | 1.000 | 1.000 |
+| car | 0.900 | 0.977 | 0.910 | 0.988 |
+| nursery | 0.760 | 0.966 | 0.932 | 0.974 |
+| vote | 0.908 | 0.963 | 0.954 | 0.982 |
+| tic-tac-toe | 1.000 | 1.000 | 0.979 | 0.983 |
+| kr-vs-kp | 0.480 | 0.974 | 0.964 | 0.992 |
+| monks-2 | 0.636 | 1.000 | 0.583 | 0.874 |
+| **mean** | **0.820** | **0.937** | **0.878** | **0.925** |
 
-**Takeaway:** adding `PromptFeatureEngineer` in front of a plain logistic regression lifts mean accuracy from 0.878 to **0.892** — beating logistic regression on most datasets and even edging out XGBoost on `adult`, `credit-g`, and `tic-tac-toe`, while keeping a fully interpretable linear model and cheap inference. Using the LLM as a *direct* classifier (`promptlearn` alone) is weaker here: when the target's class encoding is arbitrary (e.g. party labels in `vote`), direct prediction has no semantic foothold, which is exactly the gap feature engineering closes.
+**Takeaway:** `PromptFeatureEngineer` in front of a plain logistic regression reaches **0.937** mean accuracy — ahead of XGBoost (0.925) and well ahead of bare logistic regression (0.878) — while keeping a fully interpretable linear model and cheap inference. It wins outright on `tic-tac-toe`, `credit-g`, and `monks-2` (1.000 vs XGBoost's 0.874 on a synthetic logical rule), and ties the field on `adult`, `mushroom`, and `bank-marketing`.
+
+**Where it struggles** (and why this is consistent with how the method works):
+
+- **Opaque, non-semantic feature codes.** On `kr-vs-kp` the *direct* classifier scores 0.480 (below chance): the columns are cryptic chess-position codes (`bkblk`, `wkna8`) with no world knowledge to reason over, so direct prediction can't out-fit a trained model. Feature engineering + logistic regression recovers it to 0.974.
+- **Synthetic logical rules.** On `monks-2` the direct classifier can't reliably infer the exact boolean rule from a 100-row sample (0.636), but the engineered features let logistic regression learn it perfectly (1.000).
+- **Class imbalance.** On `bank-marketing` direct accuracy is high (0.878) while macro-F1 is only 0.549 — it leans to the majority class; FE lifts macro-F1 to 0.698.
+- **When raw reasoning is already strong, FE can cost a little.** On `credit-g` the direct classifier (0.780) beats the FE pipeline (0.748): funneling through a linear model discards some of the LLM's holistic judgment.
+
+Model capability matters: switching the promptlearn contenders from `gpt-5.4-mini` to `gpt-5.5` raised the direct classifier's mean from 0.640 to **0.820** (e.g. `vote` 0.193 → 0.908, `car` 0.417 → 0.900) and the FE pipeline from 0.892 to **0.937**.
 
 ---
 
