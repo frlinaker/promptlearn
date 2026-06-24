@@ -79,9 +79,16 @@ There are three ways to put an LLM near tabular data. Only one leaves you with a
 
 ## Proof: 10 OpenML datasets
 
-Accuracy on a held-out test split across 10 OpenML classification datasets with semantically meaningful categoricals. `promptlearn+FE` is `PromptFeatureEngineer → one-hot → LogisticRegression`; the promptlearn contenders use `gpt-5.5`. Reproduce with [`benchmarks/run_openml_benchmark.py`](benchmarks/run_openml_benchmark.py) (add `--model gpt-5.4-mini` for a faster, cheaper run).
+Accuracy on a held-out test split across 10 OpenML classification datasets with semantically meaningful categoricals. The four contenders are:
 
-| dataset | promptlearn | promptlearn+FE | logreg | xgboost |
+- **`promptlearn`** — `PromptClassifier` alone: the LLM writes the classifier code from the raw inputs (no other model).
+- **`promptFE→logreg`** — `PromptFeatureEngineer` → one-hot → `LogisticRegression`: the LLM *engineers features*, then a plain linear model does the classifying.
+- **`logreg`** — `LogisticRegression` on the original features (one-hot + scaled).
+- **`xgboost`** — gradient-boosted trees on the original features (one-hot + scaled).
+
+The promptlearn contenders use `gpt-5.5`. Reproduce with [`benchmarks/run_openml_benchmark.py`](benchmarks/run_openml_benchmark.py) (add `--model gpt-5.4-mini` for a faster, cheaper run).
+
+| dataset | promptlearn | promptFE→logreg | logreg | xgboost |
 | --- | ---: | ---: | ---: | ---: |
 | adult | 0.864 | 0.864 | 0.864 | 0.850 |
 | credit-g | 0.780 | 0.748 | 0.724 | 0.728 |
@@ -95,7 +102,7 @@ Accuracy on a held-out test split across 10 OpenML classification datasets with 
 | monks-2 | 0.636 | 1.000 | 0.583 | 0.874 |
 | **mean** | **0.820** | **0.937** | **0.878** | **0.925** |
 
-**Takeaway:** `PromptFeatureEngineer` in front of a plain logistic regression reaches **0.937** mean accuracy — ahead of XGBoost (0.925) and well ahead of bare logistic regression (0.878) — while staying a fully interpretable linear model with cheap inference. It wins outright on `tic-tac-toe`, `credit-g`, and `monks-2` (1.000 vs XGBoost's 0.874 on a synthetic logical rule).
+**Takeaway:** the lift from `logreg` (0.878) to `promptFE→logreg` (**0.937**) is purely the LLM's feature engineering — and it carries the same linear model *past XGBoost* (0.925) while staying fully interpretable and cheap to serve. It wins outright on `tic-tac-toe`, `credit-g`, and `monks-2` (1.000 vs XGBoost's 0.874 on a synthetic logical rule).
 
 <details>
 <summary><b>Where it struggles</b> (and why that's consistent with how the method works)</summary>

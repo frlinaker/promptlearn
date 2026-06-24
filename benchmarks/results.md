@@ -1,6 +1,6 @@
 ## promptlearn OpenML benchmark — accuracy (model=gpt-5.4-mini)
 
-| dataset | promptlearn | promptlearn+FE | logreg | xgboost |
+| dataset | promptlearn | promptFE->logreg | logreg | xgboost |
 | --- | --- | --- | --- | --- |
 | adult | 0.782 | 0.858 | 0.864 | 0.850 |
 | credit-g | 0.680 | 0.748 | 0.724 | 0.728 |

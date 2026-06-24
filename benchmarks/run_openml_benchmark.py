@@ -3,10 +3,12 @@
 
 Compares, on a common train/test split per dataset:
 
-  * ``promptlearn``      — PromptClassifier on the raw DataFrame
-  * ``promptlearn+FE``   — PromptFeatureEngineer -> one-hot -> LogisticRegression
-  * ``xgboost``          — XGBClassifier (one-hot + scaled)
-  * ``logreg``           — LogisticRegression (one-hot + scaled)
+  * ``promptlearn``       — PromptClassifier on the raw DataFrame (LLM writes the
+                            classifier code; no downstream model)
+  * ``promptFE->logreg``  — PromptFeatureEngineer -> one-hot -> LogisticRegression
+                            (the LLM engineers features; logreg does the classifying)
+  * ``logreg``            — LogisticRegression (one-hot + scaled)
+  * ``xgboost``           — XGBClassifier / gradient-boosted trees (one-hot + scaled)
 
 Built on ``promptlearn.compare_models``. Datasets are fetched with
 ``sklearn.datasets.fetch_openml`` (no extra dependency). Per-dataset results are
@@ -96,7 +98,7 @@ def build_models(model_name: str) -> dict:
     """The contenders for one dataset, given the LLM model to use."""
     models = {
         "promptlearn": PromptClassifier(model=model_name, verbose=False),
-        "promptlearn+FE": Pipeline(
+        "promptFE->logreg": Pipeline(
             [
                 ("fe", PromptFeatureEngineer(model=model_name, verbose=False)),
                 ("enc", _generic_encoder()),
