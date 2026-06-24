@@ -5,6 +5,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.4.1] — 2026-06-23 — packaging & test ergonomics
+### Added
+- `PROMPTLEARN_MODEL` environment variable to override the default model
+  without code changes (an explicit `model=` argument still wins). The test
+  suite uses it to run the live-LLM gate against a fast, cheap model
+
+### Changed
+- Code-generation prompts now require valid, properly terminated string
+  literals and instruct the model to wrap apostrophe-bearing keys (e.g.
+  `"grevy's zebra"`) in double quotes, reducing first-attempt syntax failures
+
+### Fixed
+- Packaging no longer ships the `tests` (or `examples`) directory as an
+  installable top-level package; only `promptlearn` is published
+- Added a `MANIFEST.in` that keeps local-only and secret-bearing files
+  (`.env`, `.envrc`, `.cursorrules`, `.claude/`) out of the source distribution
+
+---
+
 ## [0.4.0] — 2026-06-23 — multi-provider, reliability & explainability
 ### Added
 - Multi-provider LLM support via [litellm](https://github.com/BerriAI/litellm):

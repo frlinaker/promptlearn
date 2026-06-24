@@ -1,6 +1,6 @@
 # Roadmap
 
-Current stable release: **v0.4.0**
+Current stable release: **v0.4.1**
 
 Released versions are documented in [CHANGELOG.md](CHANGELOG.md).
 
