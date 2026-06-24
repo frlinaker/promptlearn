@@ -1,19 +1,20 @@
 #!/usr/bin/env python
-"""Benchmark promptlearn against classical baselines on OpenML datasets.
+"""Benchmark the impact of LLM feature engineering across OpenML datasets.
 
-Compares, on a common train/test split per dataset:
+This is a 2-factor study on each dataset's common train/test split:
 
-  * ``promptlearn``       — PromptClassifier on the raw DataFrame (LLM writes the
-                            classifier code; no downstream model)
-  * ``promptFE->logreg``  — PromptFeatureEngineer -> one-hot -> LogisticRegression
-                            (the LLM engineers features; logreg does the classifying)
-  * ``logreg``            — LogisticRegression (one-hot + scaled)
-  * ``xgboost``           — XGBClassifier / gradient-boosted trees (one-hot + scaled)
+  * learner  ∈ {promptlearn (PromptClassifier), logreg, xgboost}
+  * features ∈ {FE off (raw columns), FE on (PromptFeatureEngineer applied first)}
 
-Built on ``promptlearn.compare_models``. Datasets are fetched with
-``sklearn.datasets.fetch_openml`` (no extra dependency). Per-dataset results are
-cached as JSON so reruns don't re-pay for LLM calls; delete the cache dir (or
-pass ``--no-cache``) to force a fresh run.
+For each dataset a single `PromptFeatureEngineer` is fit once and its transform
+is reused for every "FE on" learner, so all three see identical engineered
+features. Results are reported as accuracy with FE off, FE on, and the delta —
+isolating what the LLM-engineered features add to each learner.
+
+Built on `promptlearn.compare_models` (which one-hot-wraps the plain sklearn
+learners). Datasets come from `sklearn.datasets.fetch_openml` (no extra
+dependency). Per-dataset results are cached as JSON so reruns don't re-pay for
+LLM calls; delete the cache dir (or pass `--no-cache`) to force a fresh run.
 
 Examples
 --------
@@ -35,17 +36,16 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from sklearn.compose import ColumnTransformer, make_column_selector
 from sklearn.datasets import fetch_openml
-from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from promptlearn import PromptClassifier, PromptFeatureEngineer, compare_models
 
 logger = logging.getLogger("promptlearn.benchmark")
+
+# A bump here invalidates older cache files when the result schema changes.
+CACHE_SCHEMA = "v2-factorial"
 
 # Curated classification datasets with semantically meaningful categorical
 # columns (where world knowledge can plausibly help). (openml_name, version).
@@ -62,26 +62,8 @@ DEFAULT_DATASETS = {
     "monks-2": ("monks-problems-2", 1),
 }
 
-
-def _generic_encoder() -> ColumnTransformer:
-    """One-hot categoricals + scale numerics, selected by dtype at runtime so it
-    adapts to whatever columns PromptFeatureEngineer produces."""
-    num = Pipeline(
-        [("impute", SimpleImputer(strategy="median")), ("scale", StandardScaler())]
-    )
-    cat = Pipeline(
-        [
-            ("impute", SimpleImputer(strategy="most_frequent")),
-            ("onehot", OneHotEncoder(handle_unknown="ignore")),
-        ]
-    )
-    return ColumnTransformer(
-        [
-            ("num", num, make_column_selector(dtype_include=np.number)),
-            # everything non-numeric (object, category, bool, string) is categorical
-            ("cat", cat, make_column_selector(dtype_exclude=np.number)),
-        ]
-    )
+# Display order for the learners.
+LEARNERS = ["promptlearn", "logreg", "xgboost"]
 
 
 def _xgb_classifier():
@@ -94,23 +76,17 @@ def _xgb_classifier():
     )
 
 
-def build_models(model_name: str) -> dict:
-    """The contenders for one dataset, given the LLM model to use."""
-    models = {
+def build_learners(model_name: str) -> dict:
+    """Fresh learner instances. `compare_models` one-hot-wraps the sklearn ones;
+    PromptClassifier consumes the (possibly FE-augmented) DataFrame directly."""
+    learners = {
         "promptlearn": PromptClassifier(model=model_name, verbose=False),
-        "promptFE->logreg": Pipeline(
-            [
-                ("fe", PromptFeatureEngineer(model=model_name, verbose=False)),
-                ("enc", _generic_encoder()),
-                ("clf", LogisticRegression(max_iter=1000)),
-            ]
-        ),
         "logreg": LogisticRegression(max_iter=1000),
     }
     xgb = _xgb_classifier()
     if xgb is not None:
-        models["xgboost"] = xgb
-    return models
+        learners["xgboost"] = xgb
+    return learners
 
 
 def load_dataset(openml_name: str, version: int, max_rows: int):
@@ -129,11 +105,12 @@ def load_dataset(openml_name: str, version: int, max_rows: int):
 
 
 def _cache_key(dataset: str, model_name: str, max_rows: int) -> str:
-    raw = f"{dataset}|{model_name}|{max_rows}"
+    raw = f"{CACHE_SCHEMA}|{dataset}|{model_name}|{max_rows}"
     return hashlib.sha1(raw.encode()).hexdigest()[:16]
 
 
-def run_one(dataset: str, spec, model_name: str, max_rows: int, cache_dir: Path | None):
+def run_one(dataset, spec, model_name, max_rows, cache_dir):
+    """Return a DataFrame indexed by learner with columns fe_off / fe_on / delta."""
     cache_file = (
         cache_dir / f"{dataset}-{_cache_key(dataset, model_name, max_rows)}.json"
         if cache_dir
@@ -149,36 +126,61 @@ def run_one(dataset: str, spec, model_name: str, max_rows: int, cache_dir: Path 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.25, random_state=42, stratify=y
     )
-
     logger.info(
         "[%s] %d rows, %d cols, %d classes", dataset, len(X), X.shape[1], n_classes
     )
-    metrics, _ = compare_models(
-        build_models(model_name),
+
+    # FE off: learners on the raw columns.
+    off, _ = compare_models(
+        build_learners(model_name),
         X_train,
         y_train,
         X_test,
         y_test,
         task="classification",
     )
-    metrics = metrics.assign(dataset=dataset, n_rows=len(X), n_classes=n_classes)
+
+    # FE on: fit one feature engineer, reuse its transform for every learner.
+    try:
+        fe = PromptFeatureEngineer(model=model_name, verbose=False).fit(
+            X_train, y_train
+        )
+        Xtr, Xte = fe.transform(X_train), fe.transform(X_test)
+        on, _ = compare_models(
+            build_learners(model_name), Xtr, y_train, Xte, y_test, task="classification"
+        )
+        on_acc = on["accuracy"]
+        logger.info("[%s] engineered features: %s", dataset, fe.new_feature_names_)
+    except Exception as e:
+        logger.warning("[%s] feature engineering failed: %s", dataset, e)
+        on_acc = pd.Series(np.nan, index=off.index)
+
+    result = pd.DataFrame({"fe_off": off["accuracy"], "fe_on": on_acc})
+    result["delta"] = result["fe_on"] - result["fe_off"]
+    result = result.assign(dataset=dataset, n_rows=len(X), n_classes=n_classes)
     if cache_file:
         cache_dir.mkdir(parents=True, exist_ok=True)
-        metrics.to_json(cache_file)
-    return metrics
+        result.to_json(cache_file)
+    return result
 
 
-def to_markdown(accuracy_table: pd.DataFrame) -> str:
-    """Render the accuracy table as a GitHub markdown table (no tabulate dep)."""
-    df = accuracy_table.copy()
-    df.loc["mean"] = df.mean(numeric_only=True)
-    df = df.round(3)
-    header = "| dataset | " + " | ".join(str(c) for c in df.columns) + " |"
-    sep = "| --- | " + " | ".join("---" for _ in df.columns) + " |"
-    lines = [header, sep]
-    for idx, row in df.iterrows():
-        cells = " | ".join("" if pd.isna(v) else f"{v:.3f}" for v in row)
-        lines.append(f"| {idx} | {cells} |")
+def _fmt(v, signed=False):
+    if pd.isna(v):
+        return ""
+    return f"{v:+.3f}" if signed else f"{v:.3f}"
+
+
+def impact_markdown(impact: pd.DataFrame) -> str:
+    """Learner × {FE off, FE on, Δ} summary table."""
+    lines = [
+        "| learner | FE off | FE on | Δ (FE on − off) |",
+        "| --- | ---: | ---: | ---: |",
+    ]
+    for learner, row in impact.iterrows():
+        lines.append(
+            f"| {learner} | {_fmt(row['fe_off'])} | {_fmt(row['fe_on'])} | "
+            f"{_fmt(row['delta'], signed=True)} |"
+        )
     return "\n".join(lines)
 
 
@@ -193,7 +195,7 @@ def main(argv=None):
     parser.add_argument(
         "--model",
         default="gpt-5.4-mini",
-        help="LLM model for promptlearn contenders (default: gpt-5.4-mini).",
+        help="LLM model for promptlearn / feature engineering (default: gpt-5.4-mini).",
     )
     parser.add_argument(
         "--max-rows",
@@ -201,17 +203,18 @@ def main(argv=None):
         default=2000,
         help="Subsample datasets larger than this many rows (cost/time control).",
     )
-    parser.add_argument("--output", help="Write the markdown accuracy table here.")
+    parser.add_argument("--output", help="Write the markdown impact table here.")
     parser.add_argument("--cache-dir", default="benchmarks/.cache")
     parser.add_argument("--no-cache", action="store_true")
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(message)s")
     logging.getLogger("promptlearn").setLevel(logging.WARNING)  # quiet per-prompt logs
+    logger.setLevel(logging.INFO)
 
     cache_dir = None if args.no_cache else Path(args.cache_dir)
 
-    acc_rows = {}
+    results = {}
     for dataset in args.datasets:
         spec = DEFAULT_DATASETS.get(dataset)
         if spec is None:
@@ -219,24 +222,31 @@ def main(argv=None):
             continue
         try:
             start = time.time()
-            metrics = run_one(dataset, spec, args.model, args.max_rows, cache_dir)
-            acc_rows[dataset] = metrics["accuracy"]
-            print(f"\n=== {dataset}  ({time.time() - start:.0f}s) ===")
-            print(metrics.round(3).to_string())
+            res = run_one(dataset, spec, args.model, args.max_rows, cache_dir)
+            results[dataset] = res
+            print(f"\n=== {dataset}  ({time.time() - start:.0f}s) ===", flush=True)
+            print(res[["fe_off", "fe_on", "delta"]].round(3).to_string(), flush=True)
         except Exception as e:
             logger.warning("[%s] failed: %s", dataset, e)
 
-    if not acc_rows:
+    if not results:
         print("No results.")
         return 1
 
-    accuracy_table = pd.DataFrame(acc_rows).T  # rows=datasets, cols=models
-    md = to_markdown(accuracy_table)
-    print(f"\n## Accuracy (model={args.model})\n")
+    # Mean accuracy per learner across datasets, FE off vs on.
+    off = pd.DataFrame({d: r["fe_off"] for d, r in results.items()}).T
+    on = pd.DataFrame({d: r["fe_on"] for d, r in results.items()}).T
+    impact = pd.DataFrame({"fe_off": off.mean(), "fe_on": on.mean()})
+    impact["delta"] = impact["fe_on"] - impact["fe_off"]
+    impact = impact.reindex([l for l in LEARNERS if l in impact.index])
+
+    md = impact_markdown(impact)
+    print(f"\n## Feature-engineering impact (model={args.model}, mean accuracy)\n")
     print(md)
     if args.output:
         Path(args.output).write_text(
-            f"## promptlearn OpenML benchmark — accuracy (model={args.model})\n\n{md}\n"
+            f"## promptlearn OpenML benchmark — feature-engineering impact "
+            f"(model={args.model}, mean accuracy)\n\n{md}\n"
         )
         print(f"\nWrote {args.output}")
     return 0
