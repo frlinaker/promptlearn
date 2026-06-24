@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 import warnings
 
@@ -17,6 +18,22 @@ from .utils import (
 )
 
 logger = logging.getLogger("promptlearn")
+
+# The library default model. Used when no model is passed and the
+# PROMPTLEARN_MODEL environment variable is unset.
+DEFAULT_MODEL = "gpt-5.5"
+
+
+def resolve_model(model: Optional[str]) -> str:
+    """Resolve the model string for an estimator.
+
+    An explicit ``model`` always wins. Otherwise the ``PROMPTLEARN_MODEL``
+    environment variable is used when set (handy for pointing tests/CI at a
+    cheaper, faster model), falling back to :data:`DEFAULT_MODEL`.
+    """
+    if model is not None:
+        return model
+    return os.environ.get("PROMPTLEARN_MODEL", DEFAULT_MODEL)
 
 
 class BasePromptEstimator(BaseEstimator):

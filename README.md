@@ -103,6 +103,8 @@ PromptClassifier(model="ollama:llama3.1")    # local Ollama
 
 API keys are read from the usual per-provider environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, …); local providers like Ollama need none.
 
+To change the default model without touching code, set `PROMPTLEARN_MODEL` (e.g. `export PROMPTLEARN_MODEL=gpt-5.4-mini` for faster, cheaper runs). An explicit `model=` argument always takes precedence.
+
 ---
 
 ### 🕳 Zero-Example Learning

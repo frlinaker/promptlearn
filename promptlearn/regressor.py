@@ -5,7 +5,7 @@ import pandas as pd
 from sklearn.base import RegressorMixin
 from sklearn.metrics import r2_score
 
-from .base import BasePromptEstimator
+from .base import BasePromptEstimator, resolve_model
 from .utils import generate_feature_dicts, safe_regress
 
 logger = logging.getLogger("promptlearn")
@@ -25,7 +25,7 @@ If there is no data given, analyze the names of the input and output columns (as
 
 Your function must have signature: def predict(**features): ... (or with explicit arguments).
 
-If you use double quotes inside a dictionary key, always use single quotes to surround the key, or escape the inner double quotes.
+Every string literal MUST be valid, properly terminated Python. If a dictionary key or value contains an apostrophe (e.g. grevy's zebra), wrap that string in double quotes ("grevy's zebra"); if it contains a double quote, wrap it in single quotes. Never leave an unterminated string literal.
 
 Only output valid Python code, no markdown or explanations.
 
@@ -37,13 +37,13 @@ Data:
 class PromptRegressor(RegressorMixin, BasePromptEstimator):
     def __init__(
         self,
-        model="gpt-5.5",
+        model=None,
         verbose: bool = True,
         max_train_rows: int = 100,
         max_retries: int = 2,
     ):
         super().__init__(
-            model=model,
+            model=resolve_model(model),
             verbose=verbose,
             max_train_rows=max_train_rows,
             max_retries=max_retries,
