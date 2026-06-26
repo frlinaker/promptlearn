@@ -1,0 +1,39 @@
+{
+  "dataset": "adult",
+  "model_id": "gpt-5.5",
+  "n_rows": 2000,
+  "n_cols": 14,
+  "n_classes": 2,
+  "class_map": {
+    "<=50K": 0,
+    ">50K": 1
+  },
+  "promptlearn": {
+    "accuracy": 0.746,
+    "balanced_accuracy": 0.7876008326827999,
+    "f1_macro": 0.7166177999723312,
+    "f1_weighted": 0.7633373229976929,
+    "error_rate": 0.254,
+    "fit_time_s": 196.61
+  },
+  "logreg": {
+    "accuracy": 0.856,
+    "balanced_accuracy": 0.790961922109463,
+    "f1_macro": 0.7991564571199036,
+    "f1_weighted": 0.8538630247037557,
+    "error_rate": 0.14400000000000002,
+    "log_loss": 0.3506825030643662,
+    "roc_auc": 0.8946135831381733,
+    "fit_time_s": 0.05
+  },
+  "xgboost": {
+    "accuracy": 0.872,
+    "balanced_accuracy": 0.80431954202446,
+    "f1_macro": 0.8181983456049451,
+    "f1_weighted": 0.8688351968002909,
+    "error_rate": 0.128,
+    "log_loss": 0.3159117102622986,
+    "roc_auc": 0.9082314164281378,
+    "fit_time_s": 0.24
+  }
+}

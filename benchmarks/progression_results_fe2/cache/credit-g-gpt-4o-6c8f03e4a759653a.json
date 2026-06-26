@@ -1,0 +1,39 @@
+{
+  "dataset": "credit-g",
+  "model_id": "gpt-4o",
+  "n_rows": 1000,
+  "n_cols": 20,
+  "n_classes": 2,
+  "class_map": {
+    "bad": 0,
+    "good": 1
+  },
+  "promptlearn": {
+    "accuracy": 0.432,
+    "balanced_accuracy": 0.5066666666666667,
+    "f1_macro": 0.4318545547660201,
+    "f1_weighted": 0.43549068561551757,
+    "error_rate": 0.5680000000000001,
+    "fit_time_s": 7.71
+  },
+  "logreg": {
+    "accuracy": 0.732,
+    "balanced_accuracy": 0.6561904761904762,
+    "f1_macro": 0.6631879511773341,
+    "f1_weighted": 0.7240835696044721,
+    "error_rate": 0.268,
+    "log_loss": 0.52638484196275,
+    "roc_auc": 0.7734095238095238,
+    "fit_time_s": 0.03
+  },
+  "xgboost": {
+    "accuracy": 0.78,
+    "balanced_accuracy": 0.6980952380952381,
+    "f1_macro": 0.7126977162080277,
+    "f1_weighted": 0.7683194383501535,
+    "error_rate": 0.21999999999999997,
+    "log_loss": 0.5672021508216858,
+    "roc_auc": 0.7673142857142856,
+    "fit_time_s": 0.05
+  }
+}

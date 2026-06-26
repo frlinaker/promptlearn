@@ -51,7 +51,7 @@ from sklearn.metrics import (
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelBinarizer
 
-from promptlearn import PromptClassifier, compare_models
+from promptlearn import PromptClassifier, PromptFeatureEngineer, compare_models
 
 logger = logging.getLogger("promptlearn.progression")
 
@@ -201,8 +201,10 @@ def _rich_metrics(
     return metrics
 
 
-def _cache_key(dataset: str, model_id: str, max_rows: int) -> str:
-    raw = f"{CACHE_SCHEMA}|{dataset}|{model_id}|{max_rows}"
+def _cache_key(
+    dataset: str, model_id: str, max_rows: int, fe_model: str | None = None
+) -> str:
+    raw = f"{CACHE_SCHEMA}|{dataset}|{model_id}|{max_rows}|fe={fe_model or ''}"
     return hashlib.sha1(raw.encode()).hexdigest()[:16]
 
 
@@ -213,6 +215,7 @@ def run_dataset_model(
     max_rows: int,
     cache_dir: Path | None,
     vertex_region: str | None = None,
+    fe_model: str | None = None,
 ) -> dict:
     """Run one (dataset, model) cell. Returns a metrics dict."""
     # Per-model region override for Vertex AI (some models only exist in specific regions).
@@ -225,7 +228,7 @@ def run_dataset_model(
 
     cache_file = (
         cache_dir
-        / f"{dataset}-{model_id.replace('/', '-')}-{_cache_key(dataset, model_id, max_rows)}.json"
+        / f"{dataset}-{model_id.replace('/', '-')}-{_cache_key(dataset, model_id, max_rows, fe_model=fe_model)}.json"
         if cache_dir
         else None
     )
@@ -253,6 +256,20 @@ def run_dataset_model(
         "n_classes": n_classes,
         "class_map": class_map,
     }
+
+    # When fe_model is set, use that LLM to engineer features before all learners run.
+    if fe_model:
+        try:
+            fe_step = PromptFeatureEngineer(model=fe_model, verbose=False)
+            X_train = fe_step.fit_transform(X_train, y_train)
+            X_test = fe_step.transform(X_test)
+            logger.info(
+                "[%s] FE (%s) produced %d cols", dataset, fe_model, X_train.shape[1]
+            )
+        except Exception as e:
+            logger.warning(
+                "[%s] FE (%s) failed, using original features: %s", dataset, fe_model, e
+            )
 
     # --- promptlearn ---
     t0 = time.time()
@@ -568,7 +585,7 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
     ax.set_ylabel(f"Mean accuracy ({n_datasets} OpenML datasets)", fontsize=12)
     ax.set_title(
         "promptlearn accuracy grows with LLM evolution\n"
-        "Classical ML baselines shown as dashed horizontals  (FE off)",
+        "Classical ML baselines shown as dashed horizontals",
         fontsize=13,
     )
     ax.legend(fontsize=10, loc="lower right")
@@ -853,7 +870,7 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
 
         fig5.suptitle(
             "promptlearn accuracy per dataset across model generations\n"
-            "Dashed = classical ML baselines  ·  FE off",
+            "Dashed = classical ML baselines",
             fontsize=13,
             y=1.01,
         )
@@ -918,6 +935,12 @@ def main(argv=None):
         help="Directory for cached results, metrics JSON, and plots.",
     )
     parser.add_argument("--no-cache", action="store_true")
+    parser.add_argument(
+        "--fe-model",
+        default=None,
+        metavar="MODEL_ID",
+        help="LLM to use for PromptFeatureEngineer (e.g. gpt-5.5). Applied before all learners. Omit to disable FE.",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(message)s")
@@ -949,6 +972,7 @@ def main(argv=None):
                     args.max_rows,
                     cache_dir,
                     vertex_region=vertex_region,
+                    fe_model=args.fe_model,
                 )
                 all_results.append(r)
                 pl_acc = r.get("promptlearn", {}).get("accuracy", float("nan"))

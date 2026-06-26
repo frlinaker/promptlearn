@@ -1,0 +1,39 @@
+{
+  "dataset": "tic-tac-toe",
+  "model_id": "gpt-4o",
+  "n_rows": 958,
+  "n_cols": 9,
+  "n_classes": 2,
+  "class_map": {
+    "negative": 0,
+    "positive": 1
+  },
+  "promptlearn": {
+    "accuracy": 0.9875,
+    "balanced_accuracy": 0.9819277108433735,
+    "f1_macro": 0.9860656848135317,
+    "f1_weighted": 0.9874441175901375,
+    "error_rate": 0.012499999999999956,
+    "fit_time_s": 11.64
+  },
+  "logreg": {
+    "accuracy": 1.0,
+    "balanced_accuracy": 1.0,
+    "f1_macro": 1.0,
+    "f1_weighted": 1.0,
+    "error_rate": 0.0,
+    "log_loss": 0.00519861443222337,
+    "roc_auc": 1.0,
+    "fit_time_s": 0.02
+  },
+  "xgboost": {
+    "accuracy": 1.0,
+    "balanced_accuracy": 1.0,
+    "f1_macro": 1.0,
+    "f1_weighted": 1.0,
+    "error_rate": 0.0,
+    "log_loss": 0.002693422371521592,
+    "roc_auc": 1.0,
+    "fit_time_s": 0.03
+  }
+}

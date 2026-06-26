@@ -1,0 +1,41 @@
+{
+  "dataset": "car",
+  "model_id": "gpt-4o",
+  "n_rows": 1728,
+  "n_cols": 6,
+  "n_classes": 4,
+  "class_map": {
+    "acc": 0,
+    "good": 1,
+    "unacc": 2,
+    "vgood": 3
+  },
+  "promptlearn": {
+    "accuracy": 0.4837962962962963,
+    "balanced_accuracy": 0.2667337046204621,
+    "f1_macro": 0.2605808746856407,
+    "f1_weighted": 0.5457030744171147,
+    "error_rate": 0.5162037037037037,
+    "fit_time_s": 10.01
+  },
+  "logreg": {
+    "accuracy": 0.9652777777777778,
+    "balanced_accuracy": 0.9361668244030286,
+    "f1_macro": 0.932953268516709,
+    "f1_weighted": 0.965531561461794,
+    "error_rate": 0.03472222222222221,
+    "log_loss": 0.15311008599689482,
+    "roc_auc_ovr": 0.9953556901985701,
+    "fit_time_s": 0.05
+  },
+  "xgboost": {
+    "accuracy": 1.0,
+    "balanced_accuracy": 1.0,
+    "f1_macro": 1.0,
+    "f1_weighted": 1.0,
+    "error_rate": 0.0,
+    "log_loss": 0.01720721833407879,
+    "roc_auc_ovr": 1.0,
+    "fit_time_s": 0.15
+  }
+}

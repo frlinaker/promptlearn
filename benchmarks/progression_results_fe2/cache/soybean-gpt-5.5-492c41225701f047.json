@@ -1,0 +1,56 @@
+{
+  "dataset": "soybean",
+  "model_id": "gpt-5.5",
+  "n_rows": 683,
+  "n_cols": 35,
+  "n_classes": 19,
+  "class_map": {
+    "2-4-d-injury": 0,
+    "alternarialeaf-spot": 1,
+    "anthracnose": 2,
+    "bacterial-blight": 3,
+    "bacterial-pustule": 4,
+    "brown-spot": 5,
+    "brown-stem-rot": 6,
+    "charcoal-rot": 7,
+    "cyst-nematode": 8,
+    "diaporthe-pod-&-stem-blight": 9,
+    "diaporthe-stem-canker": 10,
+    "downy-mildew": 11,
+    "frog-eye-leaf-spot": 12,
+    "herbicide-injury": 13,
+    "phyllosticta-leaf-spot": 14,
+    "phytophthora-rot": 15,
+    "powdery-mildew": 16,
+    "purple-seed-stain": 17,
+    "rhizoctonia-root-rot": 18
+  },
+  "promptlearn": {
+    "accuracy": 0.47368421052631576,
+    "balanced_accuracy": 0.5479925109215728,
+    "f1_macro": 0.4838579918081303,
+    "f1_weighted": 0.4760873431141206,
+    "error_rate": 0.5263157894736843,
+    "fit_time_s": 176.58
+  },
+  "logreg": {
+    "accuracy": 0.9181286549707602,
+    "balanced_accuracy": 0.9407530684418556,
+    "f1_macro": 0.9468708001888779,
+    "f1_weighted": 0.9180543952473776,
+    "error_rate": 0.08187134502923976,
+    "log_loss": 0.1955362142503916,
+    "roc_auc_ovr": 0.9978430016683717,
+    "fit_time_s": 0.06
+  },
+  "xgboost": {
+    "accuracy": 0.9298245614035088,
+    "balanced_accuracy": 0.9618057000208031,
+    "f1_macro": 0.95883389970736,
+    "f1_weighted": 0.9291040481783297,
+    "error_rate": 0.07017543859649122,
+    "log_loss": 0.1840529888868332,
+    "roc_auc_ovr": 0.9987583707332266,
+    "fit_time_s": 0.29
+  }
+}

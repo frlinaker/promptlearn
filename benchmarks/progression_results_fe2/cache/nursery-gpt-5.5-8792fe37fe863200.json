@@ -1,0 +1,41 @@
+{
+  "dataset": "nursery",
+  "model_id": "gpt-5.5",
+  "n_rows": 2000,
+  "n_cols": 8,
+  "n_classes": 4,
+  "class_map": {
+    "1": 0,
+    "3": 1,
+    "4": 2,
+    "5": 3
+  },
+  "promptlearn": {
+    "accuracy": 0.592,
+    "balanced_accuracy": 0.6498685363716038,
+    "f1_macro": 0.4640334989032312,
+    "f1_weighted": 0.5168033862735173,
+    "error_rate": 0.40800000000000003,
+    "fit_time_s": 93.9
+  },
+  "logreg": {
+    "accuracy": 0.968,
+    "balanced_accuracy": 0.8611388036809815,
+    "f1_macro": 0.8907229476335167,
+    "f1_weighted": 0.9660145082258903,
+    "error_rate": 0.03200000000000003,
+    "log_loss": 0.08048956490747654,
+    "roc_auc_ovr": 0.99603901518509,
+    "fit_time_s": 0.07
+  },
+  "xgboost": {
+    "accuracy": 0.984,
+    "balanced_accuracy": 0.938731102103418,
+    "f1_macro": 0.9522979021511964,
+    "f1_weighted": 0.9837171524128046,
+    "error_rate": 0.016000000000000014,
+    "log_loss": 0.050827767699956894,
+    "roc_auc_ovr": 0.9989018482424983,
+    "fit_time_s": 0.15
+  }
+}
