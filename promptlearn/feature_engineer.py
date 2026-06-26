@@ -21,7 +21,7 @@ You are doing feature engineering for a tabular machine-learning model.
 Write a single valid Python function called 'transform' that, given the feature variables of ONE row (passed as keyword arguments), returns a dict of NEW engineered features derived from the inputs. These new features should make a downstream model more accurate by encoding domain knowledge.
 
 Input columns: {columns}
-{target_line}
+{target_line}{dataset_stats_section}
 Guidelines:
 - Derive features using real-world/domain knowledge from semantically meaningful columns (e.g. map a country to its continent or GDP-per-capita tier, parse a date into is_weekend/month, bucket ages, combine related numeric columns into ratios).
 - Prefer NUMERIC output features (ints/floats); booleans are fine encoded as 0/1. Avoid free-text outputs.
@@ -29,6 +29,7 @@ Guidelines:
 - Return the SAME set of dict keys for every possible input row. Use a sensible default (e.g. 0) when a value is unknown, missing, or out-of-vocabulary, so the function never raises.
 - Coerce inputs with float(x)/int(x) as needed at the top of the function before using them.
 - For categorical lookups, include an exhaustive mapping (aim for 100+ keys where relevant: countries, US states, common animals, colors, etc.) with a default fallback.
+- IMPORTANT: if the existing features are already highly predictive on their own (e.g. logreg accuracy already near ceiling), or the dataset is too small to support new generalizable features, return an empty dict {{}}.
 
 Every string literal MUST be valid, properly terminated Python. If a key or value contains an apostrophe (e.g. grevy's zebra), wrap that string in double quotes ("grevy's zebra"); if it contains a double quote, wrap it in single quotes. Never leave an unterminated string literal.
 
@@ -67,7 +68,9 @@ class PromptFeatureEngineer(TransformerMixin, BasePromptEstimator):
         )
         self.new_feature_names_ = None
 
-    def fit(self, X, y=None) -> "PromptFeatureEngineer":
+    def fit(
+        self, X, y=None, dataset_stats: dict | None = None
+    ) -> "PromptFeatureEngineer":
         if not isinstance(X, pd.DataFrame):
             raise ValueError(
                 "PromptFeatureEngineer requires a pandas DataFrame with named columns."
@@ -104,10 +107,17 @@ class PromptFeatureEngineer(TransformerMixin, BasePromptEstimator):
         else:
             sample_df = sample_source
 
+        if dataset_stats:
+            stats_lines = "\n".join(f"  {k}: {v}" for k, v in dataset_stats.items())
+            dataset_stats_section = f"\nDataset statistics (use to judge whether FE will help):\n{stats_lines}\n"
+        else:
+            dataset_stats_section = ""
+
         base_prompt = DEFAULT_FEATURE_ENGINEERING_PROMPT_TEMPLATE.format(
             data=sample_df.to_csv(index=False),
             columns=", ".join(self.feature_names_),
             target_line=target_line,
+            dataset_stats_section=dataset_stats_section,
         )
         logger.info(f"[LLM Prompt]\n{base_prompt}")
 
@@ -177,8 +187,7 @@ class PromptFeatureEngineer(TransformerMixin, BasePromptEstimator):
             raise ValueError(
                 "transform() must return the same set of feature keys for every row."
             )
-        if not first:
-            raise ValueError("transform() returned no new features.")
+        # empty dict is valid — LLM decided no new features are useful (pass-through)
 
     def _infer_new_feature_names(self, rows: list) -> list:
         for row in rows:
@@ -258,24 +267,95 @@ def _logreg_xgboost_gap(X: pd.DataFrame, y, cv: int) -> float:
     return xgb_score - lr_score
 
 
-class AdaptiveFeatureEngineer(BaseEstimator, TransformerMixin):
-    """Feature engineer that decides at fit-time whether to apply FE.
+def _compute_dataset_stats(X: pd.DataFrame, y, cv: int) -> tuple[dict, float, float]:
+    """Compute pre-flight dataset statistics.
 
-    Estimates the logreg–xgboost accuracy gap via cross-validation on the fit
-    data. If the gap exceeds ``gap_threshold``, feature engineering is likely
-    to improve a downstream linear model and ``PromptFeatureEngineer`` is
-    applied; otherwise the transformer passes data through unchanged.
+    Returns (stats_dict, logreg_score, gap) where stats_dict is suitable for
+    injecting into the FE prompt.
+    """
+    n_rows, n_cols = X.shape
+    cat_cols = [
+        c
+        for c in X.columns
+        if X[c].dtype == object
+        or str(X[c].dtype) in ("category", "string", "str")
+        or pd.api.types.is_string_dtype(X[c])
+    ]
+    num_cols = [c for c in X.columns if c not in cat_cols]
+
+    gap = _logreg_xgboost_gap(X, y, cv=cv)
+
+    # Re-run logreg alone to get its score for the prompt
+    from sklearn.compose import ColumnTransformer
+
+    transformers = []
+    if num_cols:
+        transformers.append(("num", SimpleImputer(strategy="mean"), num_cols))
+    if cat_cols:
+        transformers.append(
+            (
+                "cat",
+                Pipeline(
+                    [
+                        ("imp", SimpleImputer(strategy="most_frequent")),
+                        (
+                            "enc",
+                            OrdinalEncoder(
+                                handle_unknown="use_encoded_value", unknown_value=-1
+                            ),
+                        ),
+                    ]
+                ),
+                cat_cols,
+            )
+        )
+    if transformers:
+        ct = ColumnTransformer(transformers, remainder="drop")
+        lr_pipe = Pipeline(
+            [("pre", ct), ("clf", LogisticRegression(max_iter=1000, solver="lbfgs"))]
+        )
+    else:
+        lr_pipe = Pipeline([("clf", LogisticRegression(max_iter=1000, solver="lbfgs"))])
+    lr_score = float(np.mean(cross_val_score(lr_pipe, X, y, cv=cv, scoring="accuracy")))
+
+    stats = {
+        "n_rows": n_rows,
+        "n_cols": n_cols,
+        "n_numeric_cols": len(num_cols),
+        "n_categorical_cols": len(cat_cols),
+        "logreg_cv_accuracy": f"{lr_score:.3f}",
+        "xgboost_minus_logreg_gap": f"{gap:+.3f}",
+    }
+    return stats, lr_score, gap
+
+
+class AdaptiveFeatureEngineer(BaseEstimator, TransformerMixin):
+    """Feature engineer with automatic pass-through for datasets unlikely to benefit.
+
+    Pre-flight: computes cheap dataset statistics (logreg CV accuracy,
+    logreg–xgboost gap, n_rows) before calling the LLM. Hard skips the LLM
+    entirely when signals indicate FE will not help:
+      - logreg already near ceiling (``logreg_ceiling``, default 0.95)
+      - dataset too small to generalise new features (``min_rows``, default 200)
+      - gap between xgboost and logreg is negligible (``gap_threshold``, default 0.02)
+
+    When the LLM does run, the statistics are injected into the prompt so the
+    LLM can also decide to return an empty dict (its own pass-through signal).
+    In either case the downstream learner always receives a DataFrame — either
+    the original X or X with new columns appended.
 
     Attributes after fit:
-        gap_ (float): estimated logreg–xgboost accuracy gap.
-        fe_enabled_ (bool): whether FE was applied.
-        fe_ (PromptFeatureEngineer | None): fitted FE instance, or None.
+        stats_ (dict): computed dataset statistics.
+        skip_reason_ (str | None): why FE was skipped, or None if it ran.
+        fe_ (PromptFeatureEngineer | None): fitted FE instance, or None if skipped.
     """
 
     def __init__(
         self,
         model=None,
-        gap_threshold: float = 0.05,
+        gap_threshold: float = 0.02,
+        logreg_ceiling: float = 0.95,
+        min_rows: int = 200,
         cv: int = 3,
         verbose: bool = True,
         max_train_rows: int = 100,
@@ -283,6 +363,8 @@ class AdaptiveFeatureEngineer(BaseEstimator, TransformerMixin):
     ):
         self.model = model
         self.gap_threshold = gap_threshold
+        self.logreg_ceiling = logreg_ceiling
+        self.min_rows = min_rows
         self.cv = cv
         self.verbose = verbose
         self.max_train_rows = max_train_rows
@@ -292,39 +374,58 @@ class AdaptiveFeatureEngineer(BaseEstimator, TransformerMixin):
         if not isinstance(X, pd.DataFrame):
             raise ValueError("AdaptiveFeatureEngineer requires a pandas DataFrame.")
 
-        self.gap_ = _logreg_xgboost_gap(X, y, cv=self.cv)
-        self.fe_enabled_ = self.gap_ > self.gap_threshold
+        self.stats_, lr_score, gap = _compute_dataset_stats(X, y, cv=self.cv)
+
+        self.skip_reason_: str | None = None
+        if X.shape[0] < self.min_rows:
+            self.skip_reason_ = (
+                f"n_rows={X.shape[0]} < min_rows={self.min_rows} — "
+                "too few samples for engineered features to generalise"
+            )
+        elif lr_score >= self.logreg_ceiling:
+            self.skip_reason_ = (
+                f"logreg_cv={lr_score:.3f} >= ceiling={self.logreg_ceiling} — "
+                "features already highly predictive"
+            )
+        elif gap < self.gap_threshold:
+            self.skip_reason_ = (
+                f"xgb-logreg gap={gap:+.3f} < threshold={self.gap_threshold} — "
+                "dataset appears linearly separable, FE unlikely to help"
+            )
 
         if self.verbose:
-            logger.info(
-                "[AdaptiveFE] gap=%.4f threshold=%.4f → FE %s",
-                self.gap_,
-                self.gap_threshold,
-                "ENABLED" if self.fe_enabled_ else "DISABLED (pass-through)",
-            )
+            if self.skip_reason_:
+                logger.info("[AdaptiveFE] SKIP — %s", self.skip_reason_)
+            else:
+                logger.info(
+                    "[AdaptiveFE] RUN — logreg=%.3f gap=%+.3f n=%d",
+                    lr_score,
+                    gap,
+                    X.shape[0],
+                )
 
-        if self.fe_enabled_:
-            self.fe_ = PromptFeatureEngineer(
-                model=self.model,
-                verbose=self.verbose,
-                max_train_rows=self.max_train_rows,
-                max_retries=self.max_retries,
-            )
-            self.fe_.fit(X, y)
-        else:
+        if self.skip_reason_:
             self.fe_ = None
+            return self
 
+        self.fe_ = PromptFeatureEngineer(
+            model=self.model,
+            verbose=self.verbose,
+            max_train_rows=self.max_train_rows,
+            max_retries=self.max_retries,
+        )
+        self.fe_.fit(X, y, dataset_stats=self.stats_)
         return self
 
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        if not hasattr(self, "fe_enabled_"):
+        if not hasattr(self, "stats_"):
             raise RuntimeError("Call fit() before transform().")
-        if self.fe_enabled_ and self.fe_ is not None:
+        if self.fe_ is not None:
             return self.fe_.transform(X)
         return X
 
     def get_feature_names_out(self, input_features=None):
-        if self.fe_enabled_ and self.fe_ is not None:
+        if self.fe_ is not None:
             return self.fe_.get_feature_names_out(input_features)
         base = list(input_features) if input_features is not None else []
         return np.asarray(base, dtype=object)

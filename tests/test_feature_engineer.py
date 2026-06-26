@@ -176,54 +176,68 @@ def _make_linear_dataset(n=200):
     return X, y
 
 
-def _mock_adaptive(afe, code=GOOD_CODE):
-    """Patch LLM calls on an AdaptiveFeatureEngineer's inner FE after gap check."""
-    original_fe_fit = afe.fit
-
-    def patched_fit(X, y=None):
-        result = original_fe_fit(X, y)
-        if afe.fe_ is not None:
-            afe.fe_._call_llm = lambda prompt: code
-            afe.fe_._extend_code = lambda c: c
-            # Re-run fit on the real PromptFeatureEngineer with mocked LLM.
-            afe.fe_.fit(X, y)
-        return result
-
-    afe.fit = patched_fit
-    return afe
-
-
-def test_adaptive_fe_enabled_on_nonlinear():
+def test_adaptive_fe_runs_on_nonlinear():
+    """XOR dataset: large gap, n>=200, logreg well below ceiling → FE should run."""
     X, y = _make_nonlinear_dataset()
-    afe = AdaptiveFeatureEngineer(gap_threshold=0.05, cv=3, verbose=False)
+    afe = AdaptiveFeatureEngineer(gap_threshold=0.02, cv=3, verbose=False)
     afe.fit(X, y)
-    assert hasattr(afe, "gap_")
-    assert hasattr(afe, "fe_enabled_")
-    # XOR is strongly non-linear; gap should exceed threshold
-    assert afe.fe_enabled_, f"expected FE enabled, gap={afe.gap_:.4f}"
+    assert hasattr(afe, "stats_")
+    assert afe.skip_reason_ is None, f"expected FE to run, skipped: {afe.skip_reason_}"
     assert afe.fe_ is not None
 
 
-def test_adaptive_fe_disabled_on_linear():
+def test_adaptive_skip_on_linear():
+    """Linearly separable: near-zero gap → gap skip."""
     X, y = _make_linear_dataset()
-    afe = AdaptiveFeatureEngineer(gap_threshold=0.05, cv=3, verbose=False)
+    afe = AdaptiveFeatureEngineer(gap_threshold=0.02, cv=3, verbose=False)
     afe.fit(X, y)
-    assert hasattr(afe, "gap_")
-    assert not afe.fe_enabled_, f"expected FE disabled, gap={afe.gap_:.4f}"
+    assert afe.skip_reason_ is not None
+    assert "gap" in afe.skip_reason_ or "ceiling" in afe.skip_reason_
     assert afe.fe_ is None
-    # Pass-through: output identical to input
     out = afe.transform(X)
     assert out is X
 
 
+def test_adaptive_skip_on_small_dataset():
+    """Fewer than min_rows → skip regardless of gap."""
+    X, y = _make_nonlinear_dataset(n=50)
+    afe = AdaptiveFeatureEngineer(min_rows=200, cv=2, verbose=False)
+    afe.fit(X, y)
+    assert afe.skip_reason_ is not None
+    assert "n_rows" in afe.skip_reason_
+    assert afe.fe_ is None
+
+
+def test_adaptive_skip_on_ceiling():
+    """logreg already near-perfect → ceiling skip."""
+    X, y = _make_linear_dataset(n=500)
+    afe = AdaptiveFeatureEngineer(
+        logreg_ceiling=0.5, gap_threshold=0.0, min_rows=0, cv=3, verbose=False
+    )
+    afe.fit(X, y)
+    assert afe.skip_reason_ is not None
+    assert "ceiling" in afe.skip_reason_
+    assert afe.fe_ is None
+
+
 def test_adaptive_passthrough_preserves_dataframe(Xy):
+    """Forced skip via high gap_threshold → transform returns original DataFrame."""
     X, y = Xy
-    # Force gap below threshold with a high threshold value
     afe = AdaptiveFeatureEngineer(gap_threshold=1.0, cv=2, verbose=False)
     afe.fit(X, y)
-    assert not afe.fe_enabled_
+    assert afe.skip_reason_ is not None
     out = afe.transform(X)
     pd.testing.assert_frame_equal(out, X)
+
+
+def test_adaptive_stats_always_populated(Xy):
+    """stats_ is set regardless of whether FE runs."""
+    X, y = Xy
+    afe = AdaptiveFeatureEngineer(gap_threshold=1.0, cv=2, verbose=False)
+    afe.fit(X, y)
+    assert "n_rows" in afe.stats_
+    assert "logreg_cv_accuracy" in afe.stats_
+    assert "xgboost_minus_logreg_gap" in afe.stats_
 
 
 def test_adaptive_transform_before_fit_raises(Xy):
@@ -237,3 +251,34 @@ def test_adaptive_requires_dataframe():
     afe = AdaptiveFeatureEngineer(verbose=False)
     with pytest.raises(ValueError, match="DataFrame"):
         afe.fit(np.array([[1, 2], [3, 4]]), np.array([0, 1]))
+
+
+def test_prompt_fe_empty_dict_passthrough(Xy):
+    """PromptFeatureEngineer with LLM returning empty dict → transform returns original cols."""
+    X, y = Xy
+    empty_code = "def transform(**features):\n    return {}\n"
+    fe = _mock(PromptFeatureEngineer(verbose=False), code=empty_code)
+    fe.fit(X, y)
+    assert fe.new_feature_names_ == []
+    out = fe.transform(X)
+    assert list(out.columns) == list(X.columns)
+
+
+def test_prompt_fe_dataset_stats_injected(Xy):
+    """dataset_stats passed to fit() appear in the LLM prompt."""
+    X, y = Xy
+    captured = []
+
+    fe = PromptFeatureEngineer(verbose=False)
+    fe._call_llm = lambda prompt: (captured.append(prompt), GOOD_CODE)[1]
+    fe._extend_code = lambda c: c
+    stats = {
+        "n_rows": 4,
+        "logreg_cv_accuracy": "0.750",
+        "xgboost_minus_logreg_gap": "+0.100",
+    }
+    fe.fit(X, y, dataset_stats=stats)
+
+    assert captured, "LLM was never called"
+    assert "logreg_cv_accuracy" in captured[0]
+    assert "0.750" in captured[0]
