@@ -1,4 +1,4 @@
-"""Tests for PromptFeatureEngineer.
+"""Tests for PromptFeatureEngineer and AdaptiveFeatureEngineer.
 
 The mocked tests stub the two LLM touchpoints (``_call_llm`` and
 ``_extend_code``) so they run without network. One live smoke test exercises a
@@ -14,7 +14,7 @@ import pytest
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 
-from promptlearn import PromptFeatureEngineer
+from promptlearn import AdaptiveFeatureEngineer, PromptFeatureEngineer
 
 # A simple, valid transform the mocked LLM "returns".
 GOOD_CODE = (
@@ -147,3 +147,93 @@ def test_live_feature_engineering():
     assert len(out) == len(X)
     assert len(out.columns) > len(X.columns)
     assert fe.new_feature_names_
+
+
+# ---------------------------------------------------------------------------
+# AdaptiveFeatureEngineer tests
+# ---------------------------------------------------------------------------
+
+
+def _make_nonlinear_dataset(n=200):
+    """XOR-like dataset: logreg struggles, xgboost handles it well."""
+    rng = np.random.RandomState(0)
+    X = pd.DataFrame(
+        {
+            "a": rng.randint(0, 2, n).astype(float),
+            "b": rng.randint(0, 2, n).astype(float),
+        }
+    )
+    y = pd.Series((X["a"].astype(int) ^ X["b"].astype(int)).astype(int), name="label")
+    return X, y
+
+
+def _make_linear_dataset(n=200):
+    """Linearly separable dataset: both logreg and xgboost do equally well."""
+    rng = np.random.RandomState(1)
+    x = rng.randn(n)
+    X = pd.DataFrame({"x": x, "noise": rng.randn(n) * 0.01})
+    y = pd.Series((x > 0).astype(int), name="label")
+    return X, y
+
+
+def _mock_adaptive(afe, code=GOOD_CODE):
+    """Patch LLM calls on an AdaptiveFeatureEngineer's inner FE after gap check."""
+    original_fe_fit = afe.fit
+
+    def patched_fit(X, y=None):
+        result = original_fe_fit(X, y)
+        if afe.fe_ is not None:
+            afe.fe_._call_llm = lambda prompt: code
+            afe.fe_._extend_code = lambda c: c
+            # Re-run fit on the real PromptFeatureEngineer with mocked LLM.
+            afe.fe_.fit(X, y)
+        return result
+
+    afe.fit = patched_fit
+    return afe
+
+
+def test_adaptive_fe_enabled_on_nonlinear():
+    X, y = _make_nonlinear_dataset()
+    afe = AdaptiveFeatureEngineer(gap_threshold=0.05, cv=3, verbose=False)
+    afe.fit(X, y)
+    assert hasattr(afe, "gap_")
+    assert hasattr(afe, "fe_enabled_")
+    # XOR is strongly non-linear; gap should exceed threshold
+    assert afe.fe_enabled_, f"expected FE enabled, gap={afe.gap_:.4f}"
+    assert afe.fe_ is not None
+
+
+def test_adaptive_fe_disabled_on_linear():
+    X, y = _make_linear_dataset()
+    afe = AdaptiveFeatureEngineer(gap_threshold=0.05, cv=3, verbose=False)
+    afe.fit(X, y)
+    assert hasattr(afe, "gap_")
+    assert not afe.fe_enabled_, f"expected FE disabled, gap={afe.gap_:.4f}"
+    assert afe.fe_ is None
+    # Pass-through: output identical to input
+    out = afe.transform(X)
+    assert out is X
+
+
+def test_adaptive_passthrough_preserves_dataframe(Xy):
+    X, y = Xy
+    # Force gap below threshold with a high threshold value
+    afe = AdaptiveFeatureEngineer(gap_threshold=1.0, cv=2, verbose=False)
+    afe.fit(X, y)
+    assert not afe.fe_enabled_
+    out = afe.transform(X)
+    pd.testing.assert_frame_equal(out, X)
+
+
+def test_adaptive_transform_before_fit_raises(Xy):
+    X, _ = Xy
+    afe = AdaptiveFeatureEngineer(verbose=False)
+    with pytest.raises(RuntimeError, match="fit"):
+        afe.transform(X)
+
+
+def test_adaptive_requires_dataframe():
+    afe = AdaptiveFeatureEngineer(verbose=False)
+    with pytest.raises(ValueError, match="DataFrame"):
+        afe.fit(np.array([[1, 2], [3, 4]]), np.array([0, 1]))

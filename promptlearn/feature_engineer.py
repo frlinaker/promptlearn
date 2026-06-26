@@ -3,7 +3,12 @@ import logging
 import numpy as np
 import pandas as pd
 
-from sklearn.base import TransformerMixin
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_score
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OrdinalEncoder
 
 from .base import BasePromptEstimator, resolve_model
 from .utils import generate_feature_dicts, normalize_feature_name
@@ -193,3 +198,133 @@ class PromptFeatureEngineer(TransformerMixin, BasePromptEstimator):
         except Exception as e:
             logger.error(f"[FeatureEngineer ERROR] {e} on features={features}")
         return {k: np.nan for k in (self.new_feature_names_ or [])}
+
+
+def _logreg_xgboost_gap(X: pd.DataFrame, y, cv: int) -> float:
+    """Return mean CV accuracy of xgboost minus logreg on X, y."""
+    try:
+        from xgboost import XGBClassifier
+
+        xgb_cls = XGBClassifier(n_estimators=100, eval_metric="logloss", verbosity=0)
+    except ImportError:
+        xgb_cls = None
+
+    cat_cols = [
+        c
+        for c in X.columns
+        if X[c].dtype == object
+        or str(X[c].dtype) in ("category", "string", "str")
+        or pd.api.types.is_string_dtype(X[c])
+    ]
+    num_cols = [c for c in X.columns if c not in cat_cols]
+
+    def make_pipeline(clf):
+        from sklearn.compose import ColumnTransformer
+
+        transformers = []
+        if num_cols:
+            transformers.append(("num", SimpleImputer(strategy="mean"), num_cols))
+        if cat_cols:
+            transformers.append(
+                (
+                    "cat",
+                    Pipeline(
+                        [
+                            ("imp", SimpleImputer(strategy="most_frequent")),
+                            (
+                                "enc",
+                                OrdinalEncoder(
+                                    handle_unknown="use_encoded_value", unknown_value=-1
+                                ),
+                            ),
+                        ]
+                    ),
+                    cat_cols,
+                )
+            )
+        if not transformers:
+            return Pipeline([("clf", clf)])
+        ct = ColumnTransformer(transformers, remainder="drop")
+        return Pipeline([("pre", ct), ("clf", clf)])
+
+    lr = make_pipeline(LogisticRegression(max_iter=1000, solver="lbfgs"))
+    lr_score = float(np.mean(cross_val_score(lr, X, y, cv=cv, scoring="accuracy")))
+
+    if xgb_cls is None:
+        return 0.0
+
+    xgb = make_pipeline(xgb_cls)
+    xgb_score = float(np.mean(cross_val_score(xgb, X, y, cv=cv, scoring="accuracy")))
+    return xgb_score - lr_score
+
+
+class AdaptiveFeatureEngineer(BaseEstimator, TransformerMixin):
+    """Feature engineer that decides at fit-time whether to apply FE.
+
+    Estimates the logreg–xgboost accuracy gap via cross-validation on the fit
+    data. If the gap exceeds ``gap_threshold``, feature engineering is likely
+    to improve a downstream linear model and ``PromptFeatureEngineer`` is
+    applied; otherwise the transformer passes data through unchanged.
+
+    Attributes after fit:
+        gap_ (float): estimated logreg–xgboost accuracy gap.
+        fe_enabled_ (bool): whether FE was applied.
+        fe_ (PromptFeatureEngineer | None): fitted FE instance, or None.
+    """
+
+    def __init__(
+        self,
+        model=None,
+        gap_threshold: float = 0.05,
+        cv: int = 3,
+        verbose: bool = True,
+        max_train_rows: int = 100,
+        max_retries: int = 2,
+    ):
+        self.model = model
+        self.gap_threshold = gap_threshold
+        self.cv = cv
+        self.verbose = verbose
+        self.max_train_rows = max_train_rows
+        self.max_retries = max_retries
+
+    def fit(self, X: pd.DataFrame, y=None) -> "AdaptiveFeatureEngineer":
+        if not isinstance(X, pd.DataFrame):
+            raise ValueError("AdaptiveFeatureEngineer requires a pandas DataFrame.")
+
+        self.gap_ = _logreg_xgboost_gap(X, y, cv=self.cv)
+        self.fe_enabled_ = self.gap_ > self.gap_threshold
+
+        if self.verbose:
+            logger.info(
+                "[AdaptiveFE] gap=%.4f threshold=%.4f → FE %s",
+                self.gap_,
+                self.gap_threshold,
+                "ENABLED" if self.fe_enabled_ else "DISABLED (pass-through)",
+            )
+
+        if self.fe_enabled_:
+            self.fe_ = PromptFeatureEngineer(
+                model=self.model,
+                verbose=self.verbose,
+                max_train_rows=self.max_train_rows,
+                max_retries=self.max_retries,
+            )
+            self.fe_.fit(X, y)
+        else:
+            self.fe_ = None
+
+        return self
+
+    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        if not hasattr(self, "fe_enabled_"):
+            raise RuntimeError("Call fit() before transform().")
+        if self.fe_enabled_ and self.fe_ is not None:
+            return self.fe_.transform(X)
+        return X
+
+    def get_feature_names_out(self, input_features=None):
+        if self.fe_enabled_ and self.fe_ is not None:
+            return self.fe_.get_feature_names_out(input_features)
+        base = list(input_features) if input_features is not None else []
+        return np.asarray(base, dtype=object)
