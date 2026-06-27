@@ -176,7 +176,9 @@ def run_dataset(name: str, openml_name: str, version: int) -> dict:
         "dataset": name,
         "n_rows": len(X),
         "skip_reason": afe.skip_reason_,
-        "stats": afe.stats_,
+        "probe_score_base": afe.probe_score_base_,
+        "probe_score_fe": afe.probe_score_fe_,
+        "probe_delta": afe.probe_delta_,
         "baseline": base,
     }
 

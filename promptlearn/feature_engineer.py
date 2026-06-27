@@ -1,12 +1,14 @@
 import logging
+import warnings
 
 import numpy as np
 import pandas as pd
 
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import StratifiedShuffleSplit, cross_val_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OrdinalEncoder
 
@@ -209,15 +211,8 @@ class PromptFeatureEngineer(TransformerMixin, BasePromptEstimator):
         return {k: np.nan for k in (self.new_feature_names_ or [])}
 
 
-def _logreg_xgboost_gap(X: pd.DataFrame, y, cv: int) -> float:
-    """Return mean CV accuracy of xgboost minus logreg on X, y."""
-    try:
-        from xgboost import XGBClassifier
-
-        xgb_cls = XGBClassifier(n_estimators=100, eval_metric="logloss", verbosity=0)
-    except ImportError:
-        xgb_cls = None
-
+def _make_logreg_pipeline(X: pd.DataFrame) -> Pipeline:
+    """Logreg pipeline with imputation and ordinal encoding for mixed-type DataFrames."""
     cat_cols = [
         c
         for c in X.columns
@@ -226,68 +221,6 @@ def _logreg_xgboost_gap(X: pd.DataFrame, y, cv: int) -> float:
         or pd.api.types.is_string_dtype(X[c])
     ]
     num_cols = [c for c in X.columns if c not in cat_cols]
-
-    def make_pipeline(clf):
-        from sklearn.compose import ColumnTransformer
-
-        transformers = []
-        if num_cols:
-            transformers.append(("num", SimpleImputer(strategy="mean"), num_cols))
-        if cat_cols:
-            transformers.append(
-                (
-                    "cat",
-                    Pipeline(
-                        [
-                            ("imp", SimpleImputer(strategy="most_frequent")),
-                            (
-                                "enc",
-                                OrdinalEncoder(
-                                    handle_unknown="use_encoded_value", unknown_value=-1
-                                ),
-                            ),
-                        ]
-                    ),
-                    cat_cols,
-                )
-            )
-        if not transformers:
-            return Pipeline([("clf", clf)])
-        ct = ColumnTransformer(transformers, remainder="drop")
-        return Pipeline([("pre", ct), ("clf", clf)])
-
-    lr = make_pipeline(LogisticRegression(max_iter=1000, solver="lbfgs"))
-    lr_score = float(np.mean(cross_val_score(lr, X, y, cv=cv, scoring="accuracy")))
-
-    if xgb_cls is None:
-        return 0.0
-
-    xgb = make_pipeline(xgb_cls)
-    xgb_score = float(np.mean(cross_val_score(xgb, X, y, cv=cv, scoring="accuracy")))
-    return xgb_score - lr_score
-
-
-def _compute_dataset_stats(X: pd.DataFrame, y, cv: int) -> tuple[dict, float, float]:
-    """Compute pre-flight dataset statistics.
-
-    Returns (stats_dict, logreg_score, gap) where stats_dict is suitable for
-    injecting into the FE prompt.
-    """
-    n_rows, n_cols = X.shape
-    cat_cols = [
-        c
-        for c in X.columns
-        if X[c].dtype == object
-        or str(X[c].dtype) in ("category", "string", "str")
-        or pd.api.types.is_string_dtype(X[c])
-    ]
-    num_cols = [c for c in X.columns if c not in cat_cols]
-
-    gap = _logreg_xgboost_gap(X, y, cv=cv)
-
-    # Re-run logreg alone to get its score for the prompt
-    from sklearn.compose import ColumnTransformer
-
     transformers = []
     if num_cols:
         transformers.append(("num", SimpleImputer(strategy="mean"), num_cols))
@@ -309,62 +242,116 @@ def _compute_dataset_stats(X: pd.DataFrame, y, cv: int) -> tuple[dict, float, fl
                 cat_cols,
             )
         )
-    if transformers:
-        ct = ColumnTransformer(transformers, remainder="drop")
-        lr_pipe = Pipeline(
-            [("pre", ct), ("clf", LogisticRegression(max_iter=1000, solver="lbfgs"))]
-        )
-    else:
-        lr_pipe = Pipeline([("clf", LogisticRegression(max_iter=1000, solver="lbfgs"))])
-    lr_score = float(np.mean(cross_val_score(lr_pipe, X, y, cv=cv, scoring="accuracy")))
+    clf = LogisticRegression(max_iter=1000, solver="lbfgs")
+    if not transformers:
+        return Pipeline([("clf", clf)])
+    return Pipeline(
+        [("pre", ColumnTransformer(transformers, remainder="drop")), ("clf", clf)]
+    )
 
-    stats = {
-        "n_rows": n_rows,
-        "n_cols": n_cols,
-        "n_numeric_cols": len(num_cols),
-        "n_categorical_cols": len(cat_cols),
-        "logreg_cv_accuracy": f"{lr_score:.3f}",
-        "xgboost_minus_logreg_gap": f"{gap:+.3f}",
-    }
-    return stats, lr_score, gap
+
+def _probe_fe_delta(
+    X: pd.DataFrame,
+    y,
+    fe: "PromptFeatureEngineer",
+    cv: int,
+    probe_size: float,
+) -> tuple[float, float, int]:
+    """Estimate FE lift on a small stratified probe split.
+
+    Fits ``fe`` on a probe subset, measures logreg CV accuracy with and without
+    the engineered features, and returns (score_base, score_fe, probe_n_rows).
+    """
+    n = len(X)
+    probe_n = max(int(n * probe_size), 40)
+
+    sss = StratifiedShuffleSplit(n_splits=1, test_size=0.3, random_state=42)
+    try:
+        train_idx, _ = next(sss.split(X, y))
+    except ValueError:
+        rng = np.random.default_rng(42)
+        train_idx = rng.permutation(n)[: int(n * 0.7)]
+
+    if len(train_idx) > probe_n:
+        rng = np.random.default_rng(42)
+        train_idx = rng.choice(train_idx, size=probe_n, replace=False)
+
+    X_probe = X.iloc[train_idx].reset_index(drop=True)
+    y_probe = (
+        y.iloc[train_idx].reset_index(drop=True) if hasattr(y, "iloc") else y[train_idx]
+    )
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+
+        score_base = float(
+            np.mean(
+                cross_val_score(
+                    _make_logreg_pipeline(X_probe),
+                    X_probe,
+                    y_probe,
+                    cv=cv,
+                    scoring="accuracy",
+                )
+            )
+        )
+
+        try:
+            X_probe_fe = fe.fit_transform(X_probe, y_probe)
+            score_fe = float(
+                np.mean(
+                    cross_val_score(
+                        _make_logreg_pipeline(X_probe_fe),
+                        X_probe_fe,
+                        y_probe,
+                        cv=cv,
+                        scoring="accuracy",
+                    )
+                )
+            )
+        except Exception as e:
+            logger.warning("[AdaptiveFE] probe FE failed: %s", e)
+            score_fe = score_base
+
+    return score_base, score_fe, len(train_idx)
 
 
 class AdaptiveFeatureEngineer(BaseEstimator, TransformerMixin):
     """Feature engineer with automatic pass-through for datasets unlikely to benefit.
 
-    Pre-flight: computes cheap dataset statistics (logreg CV accuracy,
-    logreg–xgboost gap, n_rows) before calling the LLM. Hard skips the LLM
-    entirely when signals indicate FE will not help:
-      - logreg already near ceiling (``logreg_ceiling``, default 0.95)
-      - dataset too small to generalise new features (``min_rows``, default 200)
-      - gap between xgboost and logreg is negligible (``gap_threshold``, default 0.02)
+    Uses a two-stage decision:
 
-    When the LLM does run, the statistics are injected into the prompt so the
-    LLM can also decide to return an empty dict (its own pass-through signal).
-    In either case the downstream learner always receives a DataFrame — either
-    the original X or X with new columns appended.
+    1. **Size guard** (no LLM): skip if n_rows < ``min_rows``.
+
+    2. **Probe CV** (one LLM call on a small subset): fit PromptFeatureEngineer
+       on a stratified probe split, measure logreg CV accuracy with and without
+       the engineered features. If the delta is <= ``min_delta`` (default 0.0),
+       discard the probe and return X unchanged at transform time. If positive,
+       re-fit FE on the full X_train and use it.
 
     Attributes after fit:
-        stats_ (dict): computed dataset statistics.
+        probe_score_base_ (float): logreg CV accuracy without FE on probe.
+        probe_score_fe_ (float): logreg CV accuracy with FE on probe.
+        probe_delta_ (float): probe_score_fe_ - probe_score_base_.
         skip_reason_ (str | None): why FE was skipped, or None if it ran.
-        fe_ (PromptFeatureEngineer | None): fitted FE instance, or None if skipped.
+        fe_ (PromptFeatureEngineer | None): fitted FE on full X, or None if skipped.
     """
 
     def __init__(
         self,
         model=None,
-        gap_threshold: float = 0.02,
-        logreg_ceiling: float = 0.95,
         min_rows: int = 200,
+        min_delta: float = 0.0,
+        probe_size: float = 0.3,
         cv: int = 3,
         verbose: bool = True,
         max_train_rows: int = 100,
         max_retries: int = 2,
     ):
         self.model = model
-        self.gap_threshold = gap_threshold
-        self.logreg_ceiling = logreg_ceiling
         self.min_rows = min_rows
+        self.min_delta = min_delta
+        self.probe_size = probe_size
         self.cv = cv
         self.verbose = verbose
         self.max_train_rows = max_train_rows
@@ -374,51 +361,71 @@ class AdaptiveFeatureEngineer(BaseEstimator, TransformerMixin):
         if not isinstance(X, pd.DataFrame):
             raise ValueError("AdaptiveFeatureEngineer requires a pandas DataFrame.")
 
-        self.stats_, lr_score, gap = _compute_dataset_stats(X, y, cv=self.cv)
-
         self.skip_reason_: str | None = None
+        self.probe_score_base_: float = float("nan")
+        self.probe_score_fe_: float = float("nan")
+        self.probe_delta_: float = float("nan")
+
+        # Stage 1: size guard — no LLM call
         if X.shape[0] < self.min_rows:
             self.skip_reason_ = (
                 f"n_rows={X.shape[0]} < min_rows={self.min_rows} — "
                 "too few samples for engineered features to generalise"
             )
-        elif lr_score >= self.logreg_ceiling:
-            self.skip_reason_ = (
-                f"logreg_cv={lr_score:.3f} >= ceiling={self.logreg_ceiling} — "
-                "features already highly predictive"
-            )
-        elif gap < self.gap_threshold:
-            self.skip_reason_ = (
-                f"xgb-logreg gap={gap:+.3f} < threshold={self.gap_threshold} — "
-                "dataset appears linearly separable, FE unlikely to help"
-            )
-
-        if self.verbose:
-            if self.skip_reason_:
+            if self.verbose:
                 logger.info("[AdaptiveFE] SKIP — %s", self.skip_reason_)
-            else:
-                logger.info(
-                    "[AdaptiveFE] RUN — logreg=%.3f gap=%+.3f n=%d",
-                    lr_score,
-                    gap,
-                    X.shape[0],
-                )
-
-        if self.skip_reason_:
             self.fe_ = None
             return self
 
+        # Stage 2: probe CV — one LLM call on a small subset
+        probe_fe = PromptFeatureEngineer(
+            model=self.model,
+            verbose=False,
+            max_train_rows=self.max_train_rows,
+            max_retries=self.max_retries,
+        )
+        self.probe_score_base_, self.probe_score_fe_, probe_n = _probe_fe_delta(
+            X, y, probe_fe, cv=self.cv, probe_size=self.probe_size
+        )
+        self.probe_delta_ = self.probe_score_fe_ - self.probe_score_base_
+
+        if self.verbose:
+            logger.info(
+                "[AdaptiveFE] probe n=%d  base=%.3f  +FE=%.3f  delta=%+.3f",
+                probe_n,
+                self.probe_score_base_,
+                self.probe_score_fe_,
+                self.probe_delta_,
+            )
+
+        if self.probe_delta_ <= self.min_delta:
+            self.skip_reason_ = (
+                f"probe_delta={self.probe_delta_:+.3f} <= min_delta={self.min_delta} — "
+                "FE did not improve logreg accuracy on probe split"
+            )
+            if self.verbose:
+                logger.info("[AdaptiveFE] SKIP — %s", self.skip_reason_)
+            self.fe_ = None
+            return self
+
+        # Probe showed lift — fit FE on full X
+        if self.verbose:
+            logger.info(
+                "[AdaptiveFE] RUN — probe delta=%+.3f, fitting FE on full data (n=%d)",
+                self.probe_delta_,
+                X.shape[0],
+            )
         self.fe_ = PromptFeatureEngineer(
             model=self.model,
             verbose=self.verbose,
             max_train_rows=self.max_train_rows,
             max_retries=self.max_retries,
         )
-        self.fe_.fit(X, y, dataset_stats=self.stats_)
+        self.fe_.fit(X, y)
         return self
 
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        if not hasattr(self, "stats_"):
+        if not hasattr(self, "skip_reason_"):
             raise RuntimeError("Call fit() before transform().")
         if self.fe_ is not None:
             return self.fe_.transform(X)

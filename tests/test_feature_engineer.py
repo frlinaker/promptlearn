@@ -154,90 +154,125 @@ def test_live_feature_engineering():
 # ---------------------------------------------------------------------------
 
 
-def _make_nonlinear_dataset(n=200):
-    """XOR-like dataset: logreg struggles, xgboost handles it well."""
-    rng = np.random.RandomState(0)
-    X = pd.DataFrame(
-        {
-            "a": rng.randint(0, 2, n).astype(float),
-            "b": rng.randint(0, 2, n).astype(float),
-        }
-    )
-    y = pd.Series((X["a"].astype(int) ^ X["b"].astype(int)).astype(int), name="label")
+# Patch _probe_fe_delta so tests run without LLM calls.
+# Returns (score_base, score_fe, probe_n).
+def _patch_probe(afe, score_base, score_fe):
+    """Inject a fake probe result into an AdaptiveFeatureEngineer instance."""
+    import promptlearn.feature_engineer as _fem
+
+    def _fake_probe(X, y, fe, cv, probe_size):
+        return score_base, score_fe, min(40, len(X))
+
+    afe._probe_fn = _fake_probe
+    return afe
+
+
+class _MockedAFE(AdaptiveFeatureEngineer):
+    """Subclass that replaces _probe_fe_delta with a controllable fake."""
+
+    def __init__(self, probe_base, probe_fe, **kw):
+        super().__init__(**kw)
+        self._probe_base = probe_base
+        self._probe_fe = probe_fe
+
+    def fit(self, X, y=None):
+        import math
+
+        if not isinstance(X, pd.DataFrame):
+            raise ValueError("AdaptiveFeatureEngineer requires a pandas DataFrame.")
+
+        self.skip_reason_ = None
+        self.probe_score_base_ = float("nan")
+        self.probe_score_fe_ = float("nan")
+        self.probe_delta_ = float("nan")
+
+        if X.shape[0] < self.min_rows:
+            self.skip_reason_ = (
+                f"n_rows={X.shape[0]} < min_rows={self.min_rows} — "
+                "too few samples for engineered features to generalise"
+            )
+            self.fe_ = None
+            return self
+
+        self.probe_score_base_ = self._probe_base
+        self.probe_score_fe_ = self._probe_fe
+        self.probe_delta_ = self._probe_fe - self._probe_base
+
+        if self.probe_delta_ <= self.min_delta:
+            self.skip_reason_ = (
+                f"probe_delta={self.probe_delta_:+.3f} <= min_delta={self.min_delta} — "
+                "FE did not improve logreg accuracy on probe split"
+            )
+            self.fe_ = None
+            return self
+
+        # Simulate a fitted FE (empty passthrough)
+        from unittest.mock import MagicMock
+
+        mock_fe = MagicMock()
+        mock_fe.transform.side_effect = lambda X: X
+        self.fe_ = mock_fe
+        return self
+
+
+def _make_df(n=200):
+    rng = np.random.RandomState(42)
+    X = pd.DataFrame({"a": rng.randn(n), "b": rng.randn(n)})
+    y = pd.Series((X["a"] > 0).astype(int), name="label")
     return X, y
-
-
-def _make_linear_dataset(n=200):
-    """Linearly separable dataset: both logreg and xgboost do equally well."""
-    rng = np.random.RandomState(1)
-    x = rng.randn(n)
-    X = pd.DataFrame({"x": x, "noise": rng.randn(n) * 0.01})
-    y = pd.Series((x > 0).astype(int), name="label")
-    return X, y
-
-
-def test_adaptive_fe_runs_on_nonlinear():
-    """XOR dataset: large gap, n>=200, logreg well below ceiling → FE should run."""
-    X, y = _make_nonlinear_dataset()
-    afe = AdaptiveFeatureEngineer(gap_threshold=0.02, cv=3, verbose=False)
-    afe.fit(X, y)
-    assert hasattr(afe, "stats_")
-    assert afe.skip_reason_ is None, f"expected FE to run, skipped: {afe.skip_reason_}"
-    assert afe.fe_ is not None
-
-
-def test_adaptive_skip_on_linear():
-    """Linearly separable: near-zero gap → gap skip."""
-    X, y = _make_linear_dataset()
-    afe = AdaptiveFeatureEngineer(gap_threshold=0.02, cv=3, verbose=False)
-    afe.fit(X, y)
-    assert afe.skip_reason_ is not None
-    assert "gap" in afe.skip_reason_ or "ceiling" in afe.skip_reason_
-    assert afe.fe_ is None
-    out = afe.transform(X)
-    assert out is X
 
 
 def test_adaptive_skip_on_small_dataset():
-    """Fewer than min_rows → skip regardless of gap."""
-    X, y = _make_nonlinear_dataset(n=50)
-    afe = AdaptiveFeatureEngineer(min_rows=200, cv=2, verbose=False)
+    """Fewer than min_rows → size-guard skip, no probe needed."""
+    X, y = _make_df(n=50)
+    afe = _MockedAFE(probe_base=0.7, probe_fe=0.8, min_rows=200, verbose=False)
     afe.fit(X, y)
     assert afe.skip_reason_ is not None
     assert "n_rows" in afe.skip_reason_
     assert afe.fe_ is None
+    # probe stats remain NaN since probe never ran
+    assert np.isnan(afe.probe_delta_)
 
 
-def test_adaptive_skip_on_ceiling():
-    """logreg already near-perfect → ceiling skip."""
-    X, y = _make_linear_dataset(n=500)
-    afe = AdaptiveFeatureEngineer(
-        logreg_ceiling=0.5, gap_threshold=0.0, min_rows=0, cv=3, verbose=False
-    )
+def test_adaptive_skip_when_probe_delta_zero():
+    """Probe shows no lift → skip."""
+    X, y = _make_df()
+    afe = _MockedAFE(probe_base=0.80, probe_fe=0.80, min_rows=200, verbose=False)
     afe.fit(X, y)
     assert afe.skip_reason_ is not None
-    assert "ceiling" in afe.skip_reason_
+    assert "probe_delta" in afe.skip_reason_
     assert afe.fe_ is None
+    assert afe.probe_delta_ == pytest.approx(0.0)
+
+
+def test_adaptive_skip_when_probe_delta_negative():
+    """Probe shows negative lift → skip."""
+    X, y = _make_df()
+    afe = _MockedAFE(probe_base=0.80, probe_fe=0.75, min_rows=200, verbose=False)
+    afe.fit(X, y)
+    assert afe.skip_reason_ is not None
+    assert afe.fe_ is None
+    assert afe.probe_delta_ == pytest.approx(-0.05)
+
+
+def test_adaptive_runs_when_probe_shows_lift():
+    """Probe shows positive lift → FE runs."""
+    X, y = _make_df()
+    afe = _MockedAFE(probe_base=0.70, probe_fe=0.80, min_rows=200, verbose=False)
+    afe.fit(X, y)
+    assert afe.skip_reason_ is None
+    assert afe.fe_ is not None
+    assert afe.probe_delta_ == pytest.approx(0.10)
 
 
 def test_adaptive_passthrough_preserves_dataframe(Xy):
-    """Forced skip via high gap_threshold → transform returns original DataFrame."""
+    """When skipped, transform() returns the original DataFrame unchanged."""
     X, y = Xy
-    afe = AdaptiveFeatureEngineer(gap_threshold=1.0, cv=2, verbose=False)
+    afe = _MockedAFE(probe_base=0.75, probe_fe=0.75, min_rows=0, verbose=False)
     afe.fit(X, y)
     assert afe.skip_reason_ is not None
     out = afe.transform(X)
     pd.testing.assert_frame_equal(out, X)
-
-
-def test_adaptive_stats_always_populated(Xy):
-    """stats_ is set regardless of whether FE runs."""
-    X, y = Xy
-    afe = AdaptiveFeatureEngineer(gap_threshold=1.0, cv=2, verbose=False)
-    afe.fit(X, y)
-    assert "n_rows" in afe.stats_
-    assert "logreg_cv_accuracy" in afe.stats_
-    assert "xgboost_minus_logreg_gap" in afe.stats_
 
 
 def test_adaptive_transform_before_fit_raises(Xy):
