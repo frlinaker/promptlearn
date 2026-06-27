@@ -1,0 +1,17 @@
+{
+  "dataset": "vote",
+  "n_rows": 435,
+  "skip_reason": "probe_delta=+0.000 <= min_delta=0.0 \u2014 FE did not improve logreg accuracy on probe split",
+  "probe_score_base": 0.8980429292929294,
+  "probe_score_fe": 0.8980429292929294,
+  "probe_delta": 0.0,
+  "baseline": {
+    "logreg": 0.944954128440367,
+    "xgboost": 0.981651376146789
+  },
+  "afe": null,
+  "afe_delta": {
+    "logreg": 0.0,
+    "xgboost": 0.0
+  }
+}

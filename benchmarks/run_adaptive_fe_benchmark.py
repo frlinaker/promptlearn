@@ -50,7 +50,7 @@ logger = logging.getLogger("afe_benchmark")
 
 FE_MODEL = "gpt-5.5"
 MAX_ROWS = 2000
-OUT_DIR = Path("benchmarks/progression_results_afe")
+OUT_DIR = Path("benchmarks/progression_results_afe2")
 
 DATASETS = {
     "adult": ("adult", 2),
@@ -258,11 +258,7 @@ def plot_lift(records: list[dict], out_path: Path):
     ):
         if sk:
             reason = r["skip_reason"] or ""
-            short = (
-                "ceiling"
-                if "ceiling" in reason
-                else ("n_rows" if "n_rows" in reason else "gap")
-            )
+            short = "n_rows" if "n_rows" in reason else "probe_delta"
             ax.text(
                 i,
                 0.005,
@@ -306,16 +302,31 @@ def plot_lift(records: list[dict], out_path: Path):
 
 def main():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Per-dataset cache: allows resuming a run that was interrupted
+    cache_dir = OUT_DIR / "cache"
+    cache_dir.mkdir(exist_ok=True)
+
     records = []
     for name, (openml_name, version) in DATASETS.items():
-        try:
-            rec = run_dataset(name, openml_name, version)
-            records.append(rec)
-        except Exception as e:
-            logger.error("[%s] FAILED: %s", name, e)
-            records.append(
-                {"dataset": name, "error": str(e), "skip_reason": None, "afe_delta": {}}
-            )
+        cache_file = cache_dir / f"{name}.json"
+        if cache_file.exists():
+            logger.info("[%s] loading from cache", name)
+            rec = json.loads(cache_file.read_text())
+        else:
+            try:
+                rec = run_dataset(name, openml_name, version)
+                cache_file.write_text(json.dumps(rec, indent=2, default=str))
+            except Exception as e:
+                logger.error("[%s] FAILED: %s", name, e)
+                rec = {
+                    "dataset": name,
+                    "error": str(e),
+                    "skip_reason": None,
+                    "afe_delta": {},
+                }
+                cache_file.write_text(json.dumps(rec, indent=2, default=str))
+        records.append(rec)
 
     out_json = OUT_DIR / "metrics_afe.json"
     out_json.write_text(json.dumps(records, indent=2, default=str))
