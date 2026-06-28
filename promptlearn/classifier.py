@@ -52,8 +52,13 @@ class PromptClassifier(ClassifierMixin, BasePromptEstimator):
             max_retries=max_retries,
         )
 
-    def fit(self, X, y) -> "PromptClassifier":
-        return super()._fit(X, y, DEFAULT_CLASSIFICATION_PROMPT_TEMPLATE)
+    def fit(self, X, y, synthetic_features=None) -> "PromptClassifier":
+        return super()._fit(
+            X,
+            y,
+            DEFAULT_CLASSIFICATION_PROMPT_TEMPLATE,
+            synthetic_features=synthetic_features,
+        )
 
     def predict(self, X) -> np.ndarray:
         if self.predict_fn is None:

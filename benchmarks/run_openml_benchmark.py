@@ -76,17 +76,34 @@ def _xgb_classifier():
     )
 
 
-def build_learners(model_name: str) -> dict:
+def build_learners(model_name: str, synthetic_features=None) -> dict:
     """Fresh learner instances. `compare_models` one-hot-wraps the sklearn ones;
     PromptClassifier consumes the (possibly FE-augmented) DataFrame directly."""
+    if synthetic_features:
+        clf = _PromptClassifierWithSyntheticFeatures(
+            model=model_name, verbose=False, synthetic_features=synthetic_features
+        )
+    else:
+        clf = PromptClassifier(model=model_name, verbose=False)
     learners = {
-        "promptlearn": PromptClassifier(model=model_name, verbose=False),
+        "promptlearn": clf,
         "logreg": LogisticRegression(max_iter=1000),
     }
     xgb = _xgb_classifier()
     if xgb is not None:
         learners["xgboost"] = xgb
     return learners
+
+
+class _PromptClassifierWithSyntheticFeatures(PromptClassifier):
+    """Thin wrapper that passes a fixed synthetic_features list to fit()."""
+
+    def __init__(self, *args, synthetic_features=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._synthetic_features = synthetic_features
+
+    def fit(self, X, y, synthetic_features=None):
+        return super().fit(X, y, synthetic_features=self._synthetic_features)
 
 
 def load_dataset(openml_name: str, version: int, max_rows: int):
@@ -146,11 +163,16 @@ def run_one(dataset, spec, model_name, max_rows, cache_dir):
             X_train, y_train
         )
         Xtr, Xte = fe.transform(X_train), fe.transform(X_test)
+        logger.info("[%s] engineered features: %s", dataset, fe.new_feature_names_)
         on, _ = compare_models(
-            build_learners(model_name), Xtr, y_train, Xte, y_test, task="classification"
+            build_learners(model_name, synthetic_features=fe.new_feature_names_),
+            Xtr,
+            y_train,
+            Xte,
+            y_test,
+            task="classification",
         )
         on_acc = on["accuracy"]
-        logger.info("[%s] engineered features: %s", dataset, fe.new_feature_names_)
     except Exception as e:
         logger.warning("[%s] feature engineering failed: %s", dataset, e)
         on_acc = pd.Series(np.nan, index=off.index)

@@ -49,8 +49,13 @@ class PromptRegressor(RegressorMixin, BasePromptEstimator):
             max_retries=max_retries,
         )
 
-    def fit(self, X, y) -> "PromptRegressor":
-        return super()._fit(X, y, DEFAULT_REGRESSION_PROMPT_TEMPLATE)
+    def fit(self, X, y, synthetic_features=None) -> "PromptRegressor":
+        return super()._fit(
+            X,
+            y,
+            DEFAULT_REGRESSION_PROMPT_TEMPLATE,
+            synthetic_features=synthetic_features,
+        )
 
     def predict(self, X) -> np.ndarray:
         if self.predict_fn is None:

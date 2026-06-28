@@ -117,7 +117,7 @@ class BasePromptEstimator(BaseEstimator):
             logger.error("LLM call failed: %s", e)
             raise RuntimeError(f"LLM call failed: {e}")
 
-    def _fit(self, X, y, prompt: str):
+    def _fit(self, X, y, prompt: str, synthetic_features: Optional[list] = None):
         data, self.feature_names_, self.target_name_ = prepare_training_data(X, y)
         self.explanation_ = None  # invalidate any cached explanation from a prior fit
 
@@ -131,6 +131,15 @@ class BasePromptEstimator(BaseEstimator):
             sample_df = data
 
         csv_data = sample_df.to_csv(index=False)
+
+        if synthetic_features:
+            synthetic_note = (
+                f"\nNote: the following columns are SYNTHETIC features pre-computed by a "
+                f"feature engineering step: {', '.join(synthetic_features)}. "
+                "Treat them as weak hints only — do NOT build your primary logic around them. "
+                "Base your prediction mainly on the original (non-synthetic) columns.\n"
+            )
+            prompt = synthetic_note + prompt
 
         base_prompt = prompt.format(data=csv_data)
         logger.info(f"[LLM Prompt]\n{base_prompt}")
