@@ -39,6 +39,10 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from sklearn.datasets import fetch_openml
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
@@ -155,6 +159,14 @@ def _xgb_classifier():
     return XGBClassifier(
         n_estimators=200, max_depth=4, learning_rate=0.1, n_jobs=4, verbosity=0
     )
+
+
+def _tabpfn_classifier():
+    try:
+        from tabpfn import TabPFNClassifier
+    except ImportError:
+        return None
+    return TabPFNClassifier()
 
 
 def load_dataset(openml_name: str, version: int, max_rows: int):
@@ -412,6 +424,59 @@ def run_dataset_model(
             logger.warning("[%s] xgboost failed: %s", dataset, e)
             result["xgboost"] = {"error": str(e)}
 
+    # tabpfn — numeric-only, max 10k rows; encode categoricals then pass raw array
+    tabpfn = _tabpfn_classifier()
+    if tabpfn is not None:
+        t0 = time.time()
+        try:
+            from sklearn.pipeline import Pipeline
+            from sklearn.preprocessing import OrdinalEncoder
+            from sklearn.compose import ColumnTransformer
+            from sklearn.impute import SimpleImputer
+
+            cat_cols = X_train.select_dtypes(
+                include=["object", "category"]
+            ).columns.tolist()
+            num_cols = [c for c in X_train.columns if c not in cat_cols]
+            transformers = []
+            if cat_cols:
+                transformers.append(
+                    (
+                        "cat",
+                        Pipeline(
+                            [
+                                ("imp", SimpleImputer(strategy="most_frequent")),
+                                (
+                                    "enc",
+                                    OrdinalEncoder(
+                                        handle_unknown="use_encoded_value",
+                                        unknown_value=-1,
+                                    ),
+                                ),
+                            ]
+                        ),
+                        cat_cols,
+                    )
+                )
+            if num_cols:
+                transformers.append(("num", SimpleImputer(strategy="mean"), num_cols))
+            preproc = ColumnTransformer(transformers, remainder="passthrough")
+            tabpfn_pipe = Pipeline([("pre", preproc), ("clf", tabpfn)])
+            tabpfn_pipe.fit(X_train, y_train)
+            y_pred_tabpfn = tabpfn_pipe.predict(X_test)
+            y_proba_tabpfn = (
+                tabpfn_pipe.predict_proba(X_test)
+                if hasattr(tabpfn_pipe, "predict_proba")
+                else None
+            )
+            result["tabpfn"] = _rich_metrics(
+                np.array(y_test), y_pred_tabpfn, y_proba_tabpfn, n_classes
+            )
+            result["tabpfn"]["fit_time_s"] = round(time.time() - t0, 2)
+        except Exception as e:
+            logger.warning("[%s] tabpfn failed: %s", dataset, e)
+            result["tabpfn"] = {"error": str(e)}
+
     if cache_file:
         cache_dir.mkdir(parents=True, exist_ok=True)
         with open(cache_file, "w") as f:
@@ -441,7 +506,7 @@ def build_summary_df(results: list[dict]) -> pd.DataFrame:
         dataset = r["dataset"]
         model_id = r["model_id"]
         meta = model_meta.get(model_id, {})
-        for learner in ("promptlearn", "logreg", "xgboost"):
+        for learner in ("promptlearn", "logreg", "xgboost", "tabpfn"):
             if learner not in r:
                 continue
             m = r[learner]
@@ -486,6 +551,7 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
     pl_data = summary[summary["learner"] == "promptlearn"].copy()
     lr_data = summary[summary["learner"] == "logreg"]
     xgb_data = summary[summary["learner"] == "xgboost"]
+    tabpfn_data = summary[summary["learner"] == "tabpfn"]
 
     # Attach provider metadata for colouring.
     model_provider = {
@@ -517,6 +583,16 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
             linewidth=1.8,
             linestyle="--",
             label=f"XGBoost  ({xgb_mean:.3f})",
+        )
+
+    if not tabpfn_data.empty:
+        tabpfn_mean = tabpfn_data["accuracy"].mean()
+        ax.axhline(
+            tabpfn_mean,
+            color="#FF7F0E",
+            linewidth=1.8,
+            linestyle="--",
+            label=f"TabPFN  ({tabpfn_mean:.3f})",
         )
 
     # promptlearn — one line per provider, colour-coded.
@@ -647,6 +723,7 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
         "promptlearn": "#D65F5F",
         "logreg": "#4878CF",
         "xgboost": "#6ACC65",
+        "tabpfn": "#FF7F0E",
     }
     bar_data = (
         df.groupby(["model_label", "release_date", "learner"])["accuracy"]
@@ -662,7 +739,7 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
         )
         learners = [
             l
-            for l in ("promptlearn", "logreg", "xgboost")
+            for l in ("promptlearn", "logreg", "xgboost", "tabpfn")
             if l in bar_data["learner"].unique()
         ]
         n_models = len(model_labels)
@@ -728,8 +805,11 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
     if not pl_data.empty and (not lr_data.empty or not xgb_data.empty):
         fig4, ax4 = plt.subplots(figsize=(12, 5))
 
+        baseline_frames = [
+            df for df in [lr_data, xgb_data, tabpfn_data] if not df.empty
+        ]
         best_baseline = (
-            pd.concat([lr_data, xgb_data])
+            pd.concat(baseline_frames)
             .groupby("release_date")["accuracy"]
             .max()
             .reset_index()
@@ -790,6 +870,7 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
             for learner, color, ls, lw in [
                 ("logreg", "#4878CF", "--", 1.5),
                 ("xgboost", "#6ACC65", "--", 1.5),
+                ("tabpfn", "#FF7F0E", "--", 1.5),
             ]:
                 ld = ds_df[ds_df["learner"] == learner]
                 if ld.empty:
@@ -895,7 +976,7 @@ def print_summary_table(df: pd.DataFrame):
     )
 
     print("\n## Model progression — mean metrics across datasets\n")
-    for learner in ("promptlearn", "logreg", "xgboost"):
+    for learner in ("promptlearn", "logreg", "xgboost", "tabpfn"):
         rows = summary[summary["learner"] == learner]
         if rows.empty:
             continue
