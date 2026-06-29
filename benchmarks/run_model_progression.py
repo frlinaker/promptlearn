@@ -99,6 +99,15 @@ MODEL_PROGRESSION = [
         "family": "GPT-5",
         "provider": "openai",
     },
+    {
+        "model_id": "gpt-5.5+web",
+        "base_model_id": "gpt-5.5",
+        "label": "GPT-5.5 +web",
+        "release_date": date(2026, 4, 1),
+        "family": "GPT-5",
+        "provider": "openai",
+        "web_search": True,
+    },
     # Google Gemini (via Vertex AI)
     {
         "model_id": "vertex_ai/gemini-2.5-flash-lite",
@@ -131,6 +140,16 @@ MODEL_PROGRESSION = [
         "family": "Gemini 3",
         "provider": "google",
         "vertex_region": "asia-southeast1",
+    },
+    {
+        "model_id": "vertex_ai/gemini-3.5-flash+web",
+        "base_model_id": "vertex_ai/gemini-3.5-flash",
+        "label": "Gemini 3.5 Flash +web",
+        "release_date": date(2026, 5, 19),
+        "family": "Gemini 3",
+        "provider": "google",
+        "vertex_region": "asia-southeast1",
+        "web_search": True,
     },
 ]
 
@@ -215,9 +234,13 @@ def _rich_metrics(
 
 
 def _cache_key(
-    dataset: str, model_id: str, max_rows: int, fe_model: str | None = None
+    dataset: str,
+    model_id: str,
+    max_rows: int,
+    fe_model: str | None = None,
+    web_search: bool = False,
 ) -> str:
-    raw = f"{CACHE_SCHEMA}|{dataset}|{model_id}|{max_rows}|fe={fe_model or ''}"
+    raw = f"{CACHE_SCHEMA}|{dataset}|{model_id}|{max_rows}|fe={fe_model or ''}|ws={web_search}"
     return hashlib.sha1(raw.encode()).hexdigest()[:16]
 
 
@@ -432,8 +455,16 @@ def run_dataset_model(
     cache_dir: Path | None,
     vertex_region: str | None = None,
     fe_model: str | None = None,
+    web_search: bool = False,
+    base_model_id: str | None = None,
 ) -> dict:
     """Run one (dataset, model) cell. Returns a metrics dict."""
+    # For web-search variants the model_id is a synthetic key (e.g. "gpt-5.5+web");
+    # the actual LLM call uses base_model_id when provided, else strips the +web suffix.
+    actual_model_id = base_model_id or (
+        model_id.removesuffix("+web") if web_search else model_id
+    )
+
     # Per-model region override for Vertex AI (some models only exist in specific regions).
     _region_override = None
     if vertex_region:
@@ -444,7 +475,7 @@ def run_dataset_model(
 
     cache_file = (
         cache_dir
-        / f"{dataset}-{model_id.replace('/', '-')}-{_cache_key(dataset, model_id, max_rows, fe_model=fe_model)}.json"
+        / f"{dataset}-{model_id.replace('/', '-')}-{_cache_key(dataset, model_id, max_rows, fe_model=fe_model, web_search=web_search)}.json"
         if cache_dir
         else None
     )
@@ -490,7 +521,9 @@ def run_dataset_model(
     # --- promptlearn ---
     t0 = time.time()
     try:
-        clf = PromptClassifier(model=model_id, verbose=False)
+        clf = PromptClassifier(
+            model=actual_model_id, verbose=False, web_search=web_search
+        )
         clf.fit(X_train, y_train, dataset_description=description or None)
         y_pred = clf.predict(X_test)
         y_proba = None
@@ -546,6 +579,8 @@ def build_summary_df(results: list[dict]) -> pd.DataFrame:
     seen_baselines: set[tuple] = set()  # (dataset, learner) — emit baselines once
 
     for r in results:
+        if "dataset" not in r or "model_id" not in r:
+            continue  # skip baseline-only cache files
         dataset = r["dataset"]
         model_id = r["model_id"]
         meta = model_meta.get(model_id, {})
@@ -554,6 +589,7 @@ def build_summary_df(results: list[dict]) -> pd.DataFrame:
         # promptlearn — qualified name, carries LLM metadata
         if "promptlearn" in r and "error" not in r["promptlearn"]:
             m = r["promptlearn"]
+            web_search = meta.get("web_search", False)
             row = {
                 "dataset": dataset,
                 "model_id": model_id,
@@ -561,6 +597,7 @@ def build_summary_df(results: list[dict]) -> pd.DataFrame:
                 "release_date": str(meta.get("release_date", "")),
                 "family": meta.get("family", ""),
                 "provider": meta.get("provider", "openai"),
+                "web_search": web_search,
                 "learner": f"promptlearn[{llm_label}]",
                 "n_rows": r.get("n_rows"),
                 "n_cols": r.get("n_cols"),
@@ -612,10 +649,21 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
     pl_df = df[df["learner"].str.startswith("promptlearn[")].copy()
     pl_df["release_date"] = pd.to_datetime(pl_df["release_date"])
 
+    if "web_search" not in pl_df.columns:
+        pl_df["web_search"] = False
+    pl_df["web_search"] = pl_df["web_search"].fillna(False)
+
     pl_summary = (
-        pl_df.groupby(["model_id", "llm_label", "release_date", "learner", "provider"])[
-            "accuracy"
-        ]
+        pl_df.groupby(
+            [
+                "model_id",
+                "llm_label",
+                "release_date",
+                "learner",
+                "provider",
+                "web_search",
+            ]
+        )["accuracy"]
         .mean()
         .reset_index()
         .sort_values("release_date")
@@ -663,6 +711,7 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
         )
 
     # promptlearn — one line per provider, colour-coded.
+    # Web-search variants are plotted as star markers offset above their base model.
     # Use cumulative-max envelope so lite/weaker models don't cause visual dips.
     provider_styles = {
         "openai": {"color": "#D65F5F", "marker": "o", "label": "promptlearn / OpenAI"},
@@ -672,8 +721,15 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
             "label": "promptlearn / Google Gemini",
         },
     }
+    if "web_search" not in pl_data.columns:
+        pl_data["web_search"] = False
+
     if not pl_data.empty:
-        for provider, grp in pl_data.groupby("provider"):
+        # Split standard vs web-search rows
+        pl_standard = pl_data[~pl_data["web_search"].fillna(False)].copy()
+        pl_web = pl_data[pl_data["web_search"].fillna(False)].copy()
+
+        for provider, grp in pl_standard.groupby("provider"):
             grp = grp.sort_values("release_date").reset_index(drop=True)
             style = provider_styles.get(
                 provider,
@@ -717,6 +773,61 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
                     alpha=alpha,
                     arrowprops=dict(arrowstyle="-", color=color, lw=0.8, alpha=alpha),
                 )
+
+        # Web-search variants: star markers, lighter shade, dotted vertical connector
+        # to their same-date base model point.
+        _web_legend_added: set[str] = set()
+        for _, row in pl_web.iterrows():
+            provider = row["provider"]
+            style = provider_styles.get(
+                provider,
+                {"color": "#999", "marker": "o", "label": f"promptlearn / {provider}"},
+            )
+            color = style["color"]
+            legend_key = f"{provider}_web"
+            label = (
+                f"promptlearn / {provider.title()} +web search"
+                if legend_key not in _web_legend_added
+                else "_nolegend_"
+            )
+            _web_legend_added.add(legend_key)
+            ax.scatter(
+                row["release_date"],
+                row["accuracy"],
+                marker="*",
+                s=220,
+                color=color,
+                alpha=0.9,
+                zorder=5,
+                label=label,
+            )
+            # Dotted vertical line connecting to base model point (same date)
+            base_rows = pl_standard[
+                (pl_standard["provider"] == provider)
+                & (pl_standard["release_date"] == row["release_date"])
+            ]
+            if not base_rows.empty:
+                base_acc = base_rows["accuracy"].iloc[0]
+                ax.plot(
+                    [row["release_date"], row["release_date"]],
+                    [base_acc, row["accuracy"]],
+                    color=color,
+                    linewidth=1.2,
+                    linestyle=":",
+                    alpha=0.7,
+                    zorder=3,
+                )
+            ax.annotate(
+                f"{row['accuracy']:.3f}\n{row['llm_label']}",
+                xy=(row["release_date"], row["accuracy"]),
+                xytext=(30, 0),
+                textcoords="offset points",
+                ha="left",
+                fontsize=8.5,
+                color=color,
+                alpha=0.9,
+                arrowprops=dict(arrowstyle="-", color=color, lw=0.8, alpha=0.7),
+            )
 
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
     ax.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=4, maxticks=10))
@@ -921,8 +1032,13 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
                 if ld.empty:
                     continue
                 val = ld["accuracy"].mean()
-                x_min = ds_df["release_date"].min()
-                x_max = ds_df["release_date"].max()
+                pl_dates = ds_df[ds_df["learner"].str.startswith("promptlearn[")][
+                    "release_date"
+                ].dropna()
+                if pl_dates.empty:
+                    continue
+                x_min = pl_dates.min()
+                x_max = pl_dates.max()
                 ax.plot(
                     [x_min, x_max],
                     [val, val],
@@ -1103,7 +1219,11 @@ def main(argv=None):
 
     all_results = []
     for model_id in models_to_run:
-        vertex_region = model_lookup[model_id].get("vertex_region")
+        meta = model_lookup[model_id]
+        vertex_region = meta.get("vertex_region")
+        web_search = meta.get("web_search", False)
+        base_model_id = meta.get("base_model_id")
+        label = meta.get("label", model_id)
         for dataset in args.datasets:
             spec = DEFAULT_DATASETS.get(dataset)
             if spec is None:
@@ -1118,13 +1238,15 @@ def main(argv=None):
                     cache_dir,
                     vertex_region=vertex_region,
                     fe_model=args.fe_model,
+                    web_search=web_search,
+                    base_model_id=base_model_id,
                 )
                 # Merge baseline results into this row for summary/plotting.
                 r.update(baselines.get(dataset, {}))
                 all_results.append(r)
                 pl_acc = r.get("promptlearn", {}).get("accuracy", float("nan"))
                 print(
-                    f"  {model_id:20s}  {dataset:20s}  promptlearn={pl_acc:.3f}",
+                    f"  promptlearn[{label}]  {dataset}  accuracy={pl_acc:.3f}",
                     flush=True,
                 )
             except Exception as e:

@@ -94,11 +94,15 @@ class BasePromptEstimator(BaseEstimator):
                 self.predict_fn = None
 
     # Models known to support the web_search_options parameter.
+    # OpenAI: only dedicated search-preview models; standard chat models (gpt-5.5 etc.) do NOT.
+    # Google: Gemini models via Vertex AI support web_search_options via Google Search grounding.
     _WEB_SEARCH_MODELS = {
         "gpt-4o-search-preview",
         "gpt-4o-mini-search-preview",
-        "gpt-5.5",
-        "gpt-5.4-mini",
+        "vertex_ai/gemini-2.5-pro",
+        "vertex_ai/gemini-2.5-flash",
+        "vertex_ai/gemini-2.5-flash-lite",
+        "vertex_ai/gemini-3.5-flash",
     }
 
     def _call_llm(self, prompt: str, web_search: bool = False) -> str:

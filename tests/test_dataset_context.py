@@ -163,7 +163,9 @@ def test_web_search_unsupported_model_warns(monkeypatch, caplog):
 
 
 def test_web_search_supported_model_passes_options(monkeypatch):
-    clf = PromptClassifier(model="gpt-5.5", verbose=False, web_search=True)
+    clf = PromptClassifier(
+        model="gpt-4o-search-preview", verbose=False, web_search=True
+    )
 
     calls = []
 
