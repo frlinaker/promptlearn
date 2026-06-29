@@ -6,75 +6,96 @@ Released versions are documented in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
-## [v0.6.0] — more baselines + usability ✓ DONE
+## The core thesis
 
-- [x] Add TabPFN as an optional benchmark baseline — 93.7% mean accuracy across 13
-      datasets, stronger ceiling than XGBoost (91.9%); runs once per dataset,
-      model-independent
-- [x] CLI entry point: `promptlearn fit mydata.csv --target col`
-- [x] Per-dataset FE lift analysis — semantic datasets (car, adult, soybean) gained
-      most; abstract datasets (tic-tac-toe, monks-2) also benefited via AFE;
-      see `benchmarks/progression_results/fe_per_dataset_lift_afe.png`
+promptlearn's accuracy is a **direct function of LLM capability** — it improves
+for free every time a new model ships, with no code changes. The benchmark already
+shows this: 54% (GPT-4o, May 2024) → 84% (GPT-5.5/Gemini 3.5 Flash, mid-2026),
+closing in on XGBoost (92%) and TabPFN (94%). The roadmap below is organised
+around amplifying that property.
 
 ---
 
-## [v1.0.0] — stable API
-Declare the `fit` / `predict` / `score` / `sample` / `explain` contract stable.
-Requires benchmark suite and multi-provider support to be in good shape.
+## Next: getting traction
+
+### Living benchmark (the main growth driver)
+The model-progression chart is our best marketing asset. It shows a clean rising
+curve that updates automatically as new LLMs ship. Make it a public, auto-updating
+leaderboard so the story tells itself.
+
+- [ ] Host the benchmark chart at a stable URL (GitHub Pages or HuggingFace Space)
+- [ ] Add a GitHub Action that re-runs the benchmark nightly/weekly and pushes
+      updated charts — every new OpenAI/Google release becomes a press event
+- [ ] Badge for README: live accuracy vs XGBoost gap
+
+### Publicity (issues #9, #10, #11)
+- [ ] Medium: *"Zero-shot classification closing in on XGBoost"*
+      (issue #10) — progression chart is ready, no new code needed; this is the
+      article most likely to drive GitHub stars
+- [ ] Medium: *"How an LLM recovered F=ma from a CSV"* (issue #9) — regression
+      story, generated code, explain(); targets a broader audience
+- [ ] Kaggle notebook: `AdaptiveFeatureEngineer` + XGBoost (issue #11)
 
 ---
 
-## Publicity (version-independent)
-- [ ] Medium / Towards Data Science: *"How an LLM recovered F=ma from a CSV"*
-      (issue #9) — falling-object regression demo, generated code, explain()
-- [ ] Medium: *"Zero-shot classification closing in on XGBoost — when and why"*
-      (issue #10) — model-progression chart ready; GPT-5.5/Gemini 3.5 Flash at
-      84%, XGBoost 91.9%, TabPFN 93.7%; heatmap shows where LLMs win
-- [ ] Kaggle notebook: `AdaptiveFeatureEngineer` + XGBoost vs vanilla XGBoost
-      (issue #11) — AFE lifts logreg up to +29pp on semantic datasets
+## v0.7.0 — confidence + ensemble
+
+These two features amplify the "gets better with smarter models" thesis:
+
+### Confidence / abstain
+Let the model express uncertainty and refuse to predict on rows it can't handle.
+Accuracy on *answered* questions climbs faster than raw accuracy, and the gap
+to XGBoost narrows further.
+
+- [ ] `predict_proba()` returns calibrated probabilities from the generated code
+      (LLM annotates the heuristic with confidence weights per branch)
+- [ ] `abstain_threshold` parameter: rows below confidence threshold return `None`
+- [ ] Benchmark: accuracy@coverage curve (how does accuracy change as we
+      allow more abstentions?)
+
+### Multi-model ensemble
+Run 2–3 cheap models + 1 frontier model, take majority vote. Approaches TabPFN
+accuracy at lower per-row cost than a single frontier call.
+
+- [ ] `EnsemblePromptClassifier(models=[...])` — fits each, majority-votes at predict
+- [ ] Benchmark: does a GPT-4o-mini × 3 + GPT-5.5 × 1 ensemble beat GPT-5.5 alone?
 
 ---
 
-## LLM evolution benchmark (model-progression chart) ✓ DONE
+## v0.8.0 — smarter prompting
 
-**Status:** Complete. `benchmarks/run_model_progression.py`
+Chain-of-thought and self-critique both benefit disproportionately from stronger
+models — they widen the gap between weak and strong LLMs, making the progression
+chart steeper.
 
-**Results (13 OpenML datasets, FE off):**
+- [ ] **Chain-of-thought fit**: ask the LLM to reason step-by-step before writing
+      the predict function; store the reasoning in `clf.reasoning_`
+- [ ] **Self-critique loop**: after generating code, ask the LLM to identify
+      failure cases and patch them; retry up to N times
+- [ ] **Contrastive examples**: when accuracy on a validation split is low, feed
+      the wrong predictions back to the LLM for targeted refinement
+- [ ] Benchmark: do these techniques close the gap on abstract datasets
+      (kr-vs-kp, credit-g) where raw prompting struggles most?
 
-| Model | Mean accuracy |
-|---|---|
-| GPT-4o (May 2024) | 54.0% |
-| GPT-4o mini | 42.8% |
-| GPT-4.1 | 60.0% |
-| Gemini 2.5 Flash Lite | 57.6% |
-| Gemini 2.5 Flash | 70.0% |
-| GPT-5.4 mini | 50.4% |
-| Gemini 2.5 Pro | 77.3% |
-| GPT-5.5 | **84.4%** |
-| Gemini 3.5 Flash | **84.1%** |
-| logreg baseline | 87.6% |
-| xgboost baseline | 91.9% |
-| TabPFN baseline | **93.7%** |
+---
 
-**FE lift results** (`benchmarks/progression_results/metrics_afe.json`):
+## v1.0.0 — stable API
 
-| Dataset | logreg Δ | xgboost Δ | notes |
-|---|---|---|---|
-| car | +28.7pp | +1.4pp | abstract-style but FE cracked the structure |
-| tic-tac-toe | +32.9pp | +0.4pp | abstract — AFE found win-condition features |
-| monks-2 | +2.0pp | +9.9pp | abstract |
-| soybean | +8.2pp | +5.3pp | semantic |
-| adult | +3.4pp | +1.0pp | semantic |
-| nursery | +3.8pp | −2.0pp | semantic — xgb near ceiling |
-| credit-g | +6.8pp | −2.8pp | semantic — xgb near ceiling |
+Declare the `fit` / `predict` / `predict_proba` / `score` / `sample` / `explain`
+contract stable. Requires v0.7 confidence interface to be settled first.
 
-AFE skipped: bank-marketing, mushroom, vote, kr-vs-kp, hepatitis, lymph (pre-flight vetoed)
+---
 
-**Datasets:** adult, credit-g, bank-marketing, mushroom, car, nursery, vote,
-tic-tac-toe, kr-vs-kp, monks-2, soybean, hepatitis, lymph
+## Ideas parking lot
 
-**CLI:**
-```bash
-python benchmarks/run_model_progression.py
-python benchmarks/run_adaptive_fe_benchmark.py
-```
+Things worth exploring but not yet sequenced:
+
+- **Regression: physical law recovery** — synthetic datasets (kinematics,
+  thermodynamics, economics) where ground truth is a known formula; measure
+  how well each LLM generation recovers the exact law (R², symbolic match)
+- **Streaming leaderboard** — auto-submit new model results to a public HF dataset
+  so the community can track progress without running the benchmark themselves
+- **Plugin system for domain prompts** — let users inject domain knowledge into
+  the fit prompt (e.g. "this is medical data; treat feature X as a risk factor")
+- **Cross-lingual datasets** — do LLMs handle feature names in non-English languages?
+  Tests whether world knowledge transfer is language-dependent
