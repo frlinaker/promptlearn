@@ -124,7 +124,9 @@ def test_fit_retries_then_succeeds(monkeypatch):
             "def predict(**features): return 0",  # valid
         ]
     )
-    monkeypatch.setattr(clf, "_call_llm", lambda prompt: next(outputs))
+    monkeypatch.setattr(
+        clf, "_call_llm", lambda prompt, web_search=False: next(outputs)
+    )
     X = pd.DataFrame({"a": [1, 2, 3]})
     y = pd.Series([0, 1, 0], name="target")
     clf.fit(X, y)
@@ -144,7 +146,7 @@ def test_fit_feedback_includes_error(monkeypatch):
         ]
     )
 
-    def fake_llm(prompt):
+    def fake_llm(prompt, web_search=False):
         prompts.append(prompt)
         return next(outputs)
 
@@ -161,7 +163,7 @@ def test_fit_raises_after_exhausting_retries(monkeypatch):
     monkeypatch.setattr(
         clf,
         "_call_llm",
-        lambda prompt: "def predict(**features): raise ValueError('always broken')",
+        lambda prompt, web_search=False: "def predict(**features): raise ValueError('always broken')",
     )
     with pytest.raises(ValueError, match="always broken"):
         clf.fit(pd.DataFrame({"a": [1, 2]}), pd.Series([0, 1], name="target"))
@@ -196,7 +198,9 @@ def test_fit_too_many_rows(monkeypatch):
     y = pd.Series(np.arange(10), name="target")
     # Patch _call_llm to return a stub function
     monkeypatch.setattr(
-        clf, "_call_llm", lambda prompt: "def predict(**features): return 0"
+        clf,
+        "_call_llm",
+        lambda prompt, web_search=False: "def predict(**features): return 0",
     )
     # Now .fit should use the patched function
     clf.fit(X, y)
@@ -208,7 +212,7 @@ def test_fit_blank_llm_output(monkeypatch):
     clf = PromptClassifier()
     X = pd.DataFrame({"a": [1, 2, 3]})
     y = pd.Series([1, 2, 3], name="target")
-    monkeypatch.setattr(clf, "_call_llm", lambda prompt: "   \n   ")
+    monkeypatch.setattr(clf, "_call_llm", lambda prompt, web_search=False: "   \n   ")
     with pytest.raises(ValueError, match="No code to exec from LLM output"):
         clf.fit(X, y)
 
@@ -227,7 +231,7 @@ def test_fit_nonstring_llm_output(monkeypatch):
     clf = PromptClassifier()
     X = pd.DataFrame({"a": [1, 2, 3]})
     y = pd.Series([1, 2, 3], name="target")
-    monkeypatch.setattr(clf, "_call_llm", lambda prompt: 12345)
+    monkeypatch.setattr(clf, "_call_llm", lambda prompt, web_search=False: 12345)
     # Expect ValueError because the LLM output isn't code
     with pytest.raises(ValueError, match="No valid function named 'predict'"):
         clf.fit(X, y)
@@ -239,7 +243,9 @@ def test_sample_calls_llm_and_parses(monkeypatch):
     # Patch _call_llm to return a simple TSV
     clf.feature_names_ = ["x1"]
     clf.target_name_ = "y"
-    monkeypatch.setattr(clf, "_call_llm", lambda prompt: "a\tb\n1\t2\n3\t4")
+    monkeypatch.setattr(
+        clf, "_call_llm", lambda prompt, web_search=False: "a\tb\n1\t2\n3\t4"
+    )
     df = clf.sample(2)
     assert isinstance(df, pd.DataFrame)
     assert set(df.columns) == {"a", "b"}
@@ -334,7 +340,9 @@ def test_sample_generates_examples(monkeypatch):
     clf.python_code_ = "def predict(foo, bar): return 1"
     # Patch LLM call to return TSV
     monkeypatch.setattr(
-        clf, "_call_llm", lambda prompt: "foo\tbar\tbaz\n1\t2\t3\n4\t5\t6"
+        clf,
+        "_call_llm",
+        lambda prompt, web_search=False: "foo\tbar\tbaz\n1\t2\t3\n4\t5\t6",
     )
     df = clf.sample(2)
     assert isinstance(df, pd.DataFrame)

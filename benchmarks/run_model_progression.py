@@ -180,7 +180,8 @@ def load_dataset(openml_name: str, version: int, max_rows: int):
     if max_rows and len(X) > max_rows:
         X = X.sample(max_rows, random_state=42)
         y = y.loc[X.index]
-    return X.reset_index(drop=True), y.reset_index(drop=True), classes
+    description = getattr(bunch, "DESCR", None) or ""
+    return X.reset_index(drop=True), y.reset_index(drop=True), classes, description
 
 
 def _rich_metrics(
@@ -244,7 +245,7 @@ def run_dataset_baselines(
 
     openml_name, version = spec
     logger.info("[%s] running baselines…", dataset)
-    X, y, class_map = load_dataset(openml_name, version, max_rows)
+    X, y, class_map, _ = load_dataset(openml_name, version, max_rows)
     n_classes = len(class_map)
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.25, random_state=42, stratify=y
@@ -454,7 +455,7 @@ def run_dataset_model(
 
     openml_name, version = spec
     logger.info("[%s × %s] loading dataset…", dataset, model_id)
-    X, y, class_map = load_dataset(openml_name, version, max_rows)
+    X, y, class_map, description = load_dataset(openml_name, version, max_rows)
     n_classes = len(class_map)
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.25, random_state=42, stratify=y
@@ -490,7 +491,7 @@ def run_dataset_model(
     t0 = time.time()
     try:
         clf = PromptClassifier(model=model_id, verbose=False)
-        clf.fit(X_train, y_train)
+        clf.fit(X_train, y_train, dataset_description=description or None)
         y_pred = clf.predict(X_test)
         y_proba = None
         if hasattr(clf, "predict_proba"):

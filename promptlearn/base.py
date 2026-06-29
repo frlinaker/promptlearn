@@ -43,11 +43,13 @@ class BasePromptEstimator(BaseEstimator):
         verbose: bool,
         max_train_rows: int,
         max_retries: int = 2,
+        web_search: bool = False,
     ):
         self.model = model
         self.verbose = verbose
         self.max_train_rows = max_train_rows
         self.max_retries = max_retries
+        self.web_search = web_search
         self.predict_fn: Optional[Callable] = None
         self.target_name_: Optional[str] = None
         self.feature_names_: Optional[list] = None
@@ -63,6 +65,7 @@ class BasePromptEstimator(BaseEstimator):
             "verbose": self.verbose,
             "max_train_rows": self.max_train_rows,
             "max_retries": self.max_retries,
+            "web_search": self.web_search,
         }
 
     # used by GridSearchCV
@@ -90,7 +93,15 @@ class BasePromptEstimator(BaseEstimator):
                 )
                 self.predict_fn = None
 
-    def _call_llm(self, prompt: str) -> str:
+    # Models known to support the web_search_options parameter.
+    _WEB_SEARCH_MODELS = {
+        "gpt-4o-search-preview",
+        "gpt-4o-mini-search-preview",
+        "gpt-5.5",
+        "gpt-5.4-mini",
+    }
+
+    def _call_llm(self, prompt: str, web_search: bool = False) -> str:
         """Call the language model via litellm, return the response text.
 
         The provider is selected by the model string, e.g. ``gpt-5.5`` (OpenAI),
@@ -105,9 +116,24 @@ class BasePromptEstimator(BaseEstimator):
         model = self.model
         if model.startswith("ollama:"):
             model = "ollama/" + model[len("ollama:") :]
+
+        kwargs: dict = {}
+        if web_search:
+            if model in self._WEB_SEARCH_MODELS:
+                kwargs["web_search_options"] = {}
+            else:
+                logger.warning(
+                    "web_search=True requested but model %r is not in the known "
+                    "supported list %s — proceeding without web search.",
+                    model,
+                    self._WEB_SEARCH_MODELS,
+                )
+
         try:
             response = litellm.completion(
-                model=model, messages=[{"role": "user", "content": prompt}]
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                **kwargs,
             )
             content = str(response.choices[0].message.content).strip()
             if self.verbose:
@@ -117,7 +143,14 @@ class BasePromptEstimator(BaseEstimator):
             logger.error("LLM call failed: %s", e)
             raise RuntimeError(f"LLM call failed: {e}")
 
-    def _fit(self, X, y, prompt: str, synthetic_features: Optional[list] = None):
+    def _fit(
+        self,
+        X,
+        y,
+        prompt: str,
+        synthetic_features: Optional[list] = None,
+        dataset_description: Optional[str] = None,
+    ):
         data, self.feature_names_, self.target_name_ = prepare_training_data(X, y)
         self.explanation_ = None  # invalidate any cached explanation from a prior fit
 
@@ -131,6 +164,9 @@ class BasePromptEstimator(BaseEstimator):
             sample_df = data
 
         csv_data = sample_df.to_csv(index=False)
+
+        if dataset_description:
+            prompt = f"Dataset context:\n{dataset_description.strip()}\n\n" + prompt
 
         if synthetic_features:
             synthetic_note = (
@@ -155,15 +191,23 @@ class BasePromptEstimator(BaseEstimator):
             else []
         )
 
+        if self.web_search:
+            base_prompt = (
+                "You may search the web to look up information about these features "
+                "and their real-world relationships before writing the predict function.\n\n"
+            ) + base_prompt
+
         raw_code, extended_code, predict_fn = self._generate_code(
-            base_prompt, validation_rows
+            base_prompt, validation_rows, web_search=self.web_search
         )
         self.raw_python_code_ = raw_code
         self.python_code_ = extended_code
         self.predict_fn = predict_fn
         return self
 
-    def _generate_code(self, base_prompt: str, validation_rows: list):
+    def _generate_code(
+        self, base_prompt: str, validation_rows: list, web_search: bool = False
+    ):
         """Generate code from the LLM with a validation-and-retry loop.
 
         Returns ``(raw_code, extended_code, fn)``. Each attempt compiles the
@@ -176,7 +220,10 @@ class BasePromptEstimator(BaseEstimator):
         last_error: Optional[Exception] = None
         # One initial attempt plus up to max_retries corrective re-tries.
         for attempt in range(self.max_retries + 1):
-            code = self._call_llm(base_prompt + feedback)
+            # Web search only on the first attempt; retries don't need it.
+            code = self._call_llm(
+                base_prompt + feedback, web_search=web_search and attempt == 0
+            )
             if not isinstance(code, str):
                 code = str(code)
             logger.info(f"[LLM Output]\n{code}")

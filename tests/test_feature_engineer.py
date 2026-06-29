@@ -27,7 +27,7 @@ GOOD_CODE = (
 
 
 def _mock(fe, code=GOOD_CODE):
-    fe._call_llm = lambda prompt: code
+    fe._call_llm = lambda prompt, web_search=False: code
     fe._extend_code = lambda c: c
     return fe
 
@@ -84,7 +84,9 @@ def test_transform_row_failure_yields_nan(Xy):
 def test_validation_rejects_nondict_output(Xy):
     X, y = Xy
     fe = _mock(PromptFeatureEngineer(verbose=False, max_retries=0))
-    fe._call_llm = lambda prompt: "def transform(**features):\n    return 42\n"
+    fe._call_llm = (
+        lambda prompt, web_search=False: "def transform(**features):\n    return 42\n"
+    )
     with pytest.raises(ValueError, match="must return a dict"):
         fe.fit(X, y)
 
@@ -97,7 +99,7 @@ def test_validation_rejects_inconsistent_keys(Xy):
         "    age = float(features.get('age', 0) or 0)\n"
         "    return {'a': 1} if age >= 18 else {'b': 2}\n"
     )
-    fe._call_llm = lambda prompt: code
+    fe._call_llm = lambda prompt, web_search=False: code
     with pytest.raises(ValueError, match="same set of feature keys"):
         fe.fit(X, y)
 
@@ -305,7 +307,10 @@ def test_prompt_fe_dataset_stats_injected(Xy):
     captured = []
 
     fe = PromptFeatureEngineer(verbose=False)
-    fe._call_llm = lambda prompt: (captured.append(prompt), GOOD_CODE)[1]
+    fe._call_llm = lambda prompt, web_search=False: (
+        captured.append(prompt),
+        GOOD_CODE,
+    )[1]
     fe._extend_code = lambda c: c
     stats = {
         "n_rows": 4,

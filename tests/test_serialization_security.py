@@ -27,6 +27,7 @@ ALLOWED_STATE_FIELDS = {
     "verbose",
     "max_train_rows",
     "max_retries",
+    "web_search",
     "target_name_",
     "feature_names_",
     "raw_python_code_",

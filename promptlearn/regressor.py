@@ -41,20 +41,25 @@ class PromptRegressor(RegressorMixin, BasePromptEstimator):
         verbose: bool = True,
         max_train_rows: int = 100,
         max_retries: int = 2,
+        web_search: bool = False,
     ):
         super().__init__(
             model=resolve_model(model),
             verbose=verbose,
             max_train_rows=max_train_rows,
             max_retries=max_retries,
+            web_search=web_search,
         )
 
-    def fit(self, X, y, synthetic_features=None) -> "PromptRegressor":
+    def fit(
+        self, X, y, synthetic_features=None, dataset_description=None
+    ) -> "PromptRegressor":
         return super()._fit(
             X,
             y,
             DEFAULT_REGRESSION_PROMPT_TEMPLATE,
             synthetic_features=synthetic_features,
+            dataset_description=dataset_description,
         )
 
     def predict(self, X) -> np.ndarray:

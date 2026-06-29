@@ -61,12 +61,14 @@ class PromptFeatureEngineer(TransformerMixin, BasePromptEstimator):
         verbose: bool = True,
         max_train_rows: int = 100,
         max_retries: int = 2,
+        web_search: bool = False,
     ):
         super().__init__(
             model=resolve_model(model),
             verbose=verbose,
             max_train_rows=max_train_rows,
             max_retries=max_retries,
+            web_search=web_search,
         )
         self.new_feature_names_ = None
 
