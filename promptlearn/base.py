@@ -93,10 +93,22 @@ class BasePromptEstimator(BaseEstimator):
                 )
                 self.predict_fn = None
 
-    # Models known to support the web_search_options parameter.
-    # OpenAI: only dedicated search-preview models; standard chat models (gpt-5.5 etc.) do NOT.
-    # Google: Gemini models via Vertex AI support web_search_options via Google Search grounding.
-    _WEB_SEARCH_MODELS = {
+    # Models that use the Responses API for web search (tools=[{"type": "web_search"}]).
+    # GPT-5+ models on OpenAI use the Responses API; web_search_options is NOT supported.
+    _WEB_SEARCH_RESPONSES_API_MODELS = {
+        "gpt-5.5",
+        "gpt-5.4-mini",
+        "gpt-5.4",
+        "gpt-5.3",
+        "gpt-5.2",
+        "gpt-5.1",
+        "gpt-5",
+    }
+
+    # Models that support web search via web_search_options in the Chat Completions API.
+    # OpenAI: dedicated search-preview models.
+    # Google: Gemini models via Vertex AI (Google Search grounding).
+    _WEB_SEARCH_CHAT_COMPLETIONS_MODELS = {
         "gpt-4o-search-preview",
         "gpt-4o-mini-search-preview",
         "vertex_ai/gemini-2.5-pro",
@@ -104,6 +116,11 @@ class BasePromptEstimator(BaseEstimator):
         "vertex_ai/gemini-2.5-flash-lite",
         "vertex_ai/gemini-3.5-flash",
     }
+
+    # Union for external checks (e.g. warnings when model is unsupported).
+    _WEB_SEARCH_MODELS = (
+        _WEB_SEARCH_RESPONSES_API_MODELS | _WEB_SEARCH_CHAT_COMPLETIONS_MODELS
+    )
 
     def _call_llm(self, prompt: str, web_search: bool = False) -> str:
         """Call the language model via litellm, return the response text.
@@ -121,9 +138,23 @@ class BasePromptEstimator(BaseEstimator):
         if model.startswith("ollama:"):
             model = "ollama/" + model[len("ollama:") :]
 
+        if web_search and model in self._WEB_SEARCH_RESPONSES_API_MODELS:
+            # GPT-5+ uses the Responses API with tools=[{"type": "web_search"}].
+            response = litellm.responses(prompt, model, tools=[{"type": "web_search"}])
+            content = ""
+            for item in response.output:
+                if getattr(item, "type", None) == "message":
+                    for c in item.content:
+                        if getattr(c, "type", None) == "output_text":
+                            content += c.text
+            content = content.strip()
+            if self.verbose:
+                logger.info("[LLM Response]\n%s", content)
+            return content
+
         kwargs: dict = {}
         if web_search:
-            if model in self._WEB_SEARCH_MODELS:
+            if model in self._WEB_SEARCH_CHAT_COMPLETIONS_MODELS:
                 kwargs["web_search_options"] = {}
             else:
                 logger.warning(

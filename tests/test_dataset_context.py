@@ -163,6 +163,7 @@ def test_web_search_unsupported_model_warns(monkeypatch, caplog):
 
 
 def test_web_search_supported_model_passes_options(monkeypatch):
+    """Chat Completions path: gpt-4o-search-preview gets web_search_options."""
     clf = PromptClassifier(
         model="gpt-4o-search-preview", verbose=False, web_search=True
     )
@@ -181,5 +182,34 @@ def test_web_search_supported_model_passes_options(monkeypatch):
     y = pd.Series([0, 1])
     clf.fit(X, y)
 
-    # First call should have web_search_options
     assert "web_search_options" in calls[0]
+
+
+def test_web_search_responses_api_model(monkeypatch):
+    """Responses API path: gpt-5.5 uses litellm.responses with web_search tool."""
+    clf = PromptClassifier(model="gpt-5.5", verbose=False, web_search=True)
+
+    responses_calls = []
+
+    def fake_responses(prompt, model, **kwargs):
+        responses_calls.append({"model": model, "tools": kwargs.get("tools")})
+        # Build a minimal mock response matching ResponsesAPIResponse structure.
+        msg = MagicMock()
+        msg.type = "message"
+        content_part = MagicMock()
+        content_part.type = "output_text"
+        content_part.text = SIMPLE_CODE
+        msg.content = [content_part]
+        resp = MagicMock()
+        resp.output = [msg]
+        return resp
+
+    monkeypatch.setattr("litellm.responses", fake_responses)
+
+    X = pd.DataFrame({"x": [1, 2]})
+    y = pd.Series([0, 1])
+    clf.fit(X, y)
+
+    assert len(responses_calls) >= 1
+    assert responses_calls[0]["model"] == "gpt-5.5"
+    assert {"type": "web_search"} in responses_calls[0]["tools"]
