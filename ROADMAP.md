@@ -26,14 +26,12 @@ Requires benchmark suite and multi-provider support to be in good shape.
 
 ## Publicity (version-independent)
 - [ ] Medium / Towards Data Science: *"How an LLM recovered F=ma from a CSV"*
-      (built around the falling-object benchmark result)
-- [ ] Medium: *"Zero-shot classification that outperforms XGBoost — when and why"*
-      (model-progression chart is ready; Gemini 3.5 Flash at 84.1% and GPT-5.5 at
-      84.4% closing fast on xgboost 91.9%; TabPFN at 93.7% is the new ceiling;
-      semantic dataset heatmap shows where and why LLMs win)
-- [ ] Kaggle notebook: `PromptFeatureEngineer` + XGBoost vs vanilla XGBoost —
-      AFE benchmark shows FE lifts logreg by up to +29pp on semantic datasets;
-      XGBoost lift smaller but positive; good story for competition leaderboard delta
+      (issue #9) — falling-object regression demo, generated code, explain()
+- [ ] Medium: *"Zero-shot classification closing in on XGBoost — when and why"*
+      (issue #10) — model-progression chart ready; GPT-5.5/Gemini 3.5 Flash at
+      84%, XGBoost 91.9%, TabPFN 93.7%; heatmap shows where LLMs win
+- [ ] Kaggle notebook: `AdaptiveFeatureEngineer` + XGBoost vs vanilla XGBoost
+      (issue #11) — AFE lifts logreg up to +29pp on semantic datasets
 
 ---
 
