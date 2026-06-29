@@ -10,12 +10,12 @@
       ">50K": 1
     },
     "promptlearn": {
-      "accuracy": 0.872,
-      "balanced_accuracy": 0.7932171046925145,
-      "f1_macro": 0.8135198135198135,
-      "f1_weighted": 0.8669874125874125,
-      "error_rate": 0.128,
-      "fit_time_s": 232.21
+      "accuracy": 0.746,
+      "balanced_accuracy": 0.7987032700147454,
+      "f1_macro": 0.719759390267045,
+      "f1_weighted": 0.7636652470751266,
+      "error_rate": 0.254,
+      "fit_time_s": 147.07
     },
     "logreg": {
       "accuracy": 0.864,
@@ -59,12 +59,12 @@
       "good": 1
     },
     "promptlearn": {
-      "accuracy": 0.716,
-      "balanced_accuracy": 0.7247619047619047,
-      "f1_macro": 0.6940235472582785,
-      "f1_weighted": 0.7268242229921911,
-      "error_rate": 0.28400000000000003,
-      "fit_time_s": 170.13
+      "accuracy": 0.752,
+      "balanced_accuracy": 0.7352380952380952,
+      "f1_macro": 0.7204386407907077,
+      "f1_weighted": 0.7580116874684365,
+      "error_rate": 0.248,
+      "fit_time_s": 175.22
     },
     "logreg": {
       "accuracy": 0.724,
@@ -108,12 +108,12 @@
       "2": 1
     },
     "promptlearn": {
-      "accuracy": 0.87,
-      "balanced_accuracy": 0.7181101782294889,
-      "f1_macro": 0.7107485826680551,
-      "f1_weighted": 0.872146245516603,
-      "error_rate": 0.13,
-      "fit_time_s": 188.5
+      "accuracy": 0.874,
+      "balanced_accuracy": 0.7826999558108705,
+      "f1_macro": 0.7459165154264973,
+      "f1_weighted": 0.8815767695099819,
+      "error_rate": 0.126,
+      "fit_time_s": 95.9
     },
     "logreg": {
       "accuracy": 0.868,
@@ -157,12 +157,12 @@
       "p": 1
     },
     "promptlearn": {
-      "accuracy": 0.996,
-      "balanced_accuracy": 0.99609375,
-      "f1_macro": 0.9959983993597439,
-      "f1_weighted": 0.9960003201280513,
-      "error_rate": 0.0040000000000000036,
-      "fit_time_s": 175.14
+      "accuracy": 1.0,
+      "balanced_accuracy": 1.0,
+      "f1_macro": 1.0,
+      "f1_weighted": 1.0,
+      "error_rate": 0.0,
+      "fit_time_s": 171.33
     },
     "logreg": {
       "accuracy": 1.0,
@@ -208,12 +208,12 @@
       "vgood": 3
     },
     "promptlearn": {
-      "accuracy": 0.9537037037037037,
-      "balanced_accuracy": 0.796673279460299,
-      "f1_macro": 0.8500592893271762,
-      "f1_weighted": 0.9516997512198411,
-      "error_rate": 0.04629629629629628,
-      "fit_time_s": 169.69
+      "accuracy": 0.9375,
+      "balanced_accuracy": 0.7371535866821977,
+      "f1_macro": 0.7823235186593649,
+      "f1_weighted": 0.9325111127511664,
+      "error_rate": 0.0625,
+      "fit_time_s": 196.27
     },
     "logreg": {
       "accuracy": 0.9097222222222222,
@@ -259,12 +259,12 @@
       "5": 3
     },
     "promptlearn": {
-      "accuracy": 0.798,
-      "balanced_accuracy": 0.6150115030674846,
-      "f1_macro": 0.6073129267456618,
-      "f1_weighted": 0.7876818758743365,
-      "error_rate": 0.20199999999999996,
-      "fit_time_s": 130.62
+      "accuracy": 0.812,
+      "balanced_accuracy": 0.7073071866783524,
+      "f1_macro": 0.7226256106729783,
+      "f1_weighted": 0.8084052455929259,
+      "error_rate": 0.18799999999999994,
+      "fit_time_s": 79.58
     },
     "logreg": {
       "accuracy": 0.932,
@@ -308,12 +308,12 @@
       "republican": 1
     },
     "promptlearn": {
-      "accuracy": 0.926605504587156,
-      "balanced_accuracy": 0.9269722814498934,
-      "f1_macro": 0.9231853417899929,
-      "f1_weighted": 0.9269029100477789,
-      "error_rate": 0.07339449541284404,
-      "fit_time_s": 153.25
+      "accuracy": 0.8899082568807339,
+      "balanced_accuracy": 0.8660270078180525,
+      "f1_macro": 0.8787991104521868,
+      "f1_weighted": 0.8872151304738135,
+      "error_rate": 0.11009174311926606,
+      "fit_time_s": 100.0
     },
     "logreg": {
       "accuracy": 0.9541284403669725,
@@ -401,12 +401,12 @@
       "won": 1
     },
     "promptlearn": {
-      "accuracy": 0.828,
-      "balanced_accuracy": 0.828525641025641,
-      "f1_macro": 0.8279311724689876,
-      "f1_weighted": 0.8280688275310124,
-      "error_rate": 0.17200000000000004,
-      "fit_time_s": 166.47
+      "accuracy": 0.91,
+      "balanced_accuracy": 0.9134615384615384,
+      "f1_macro": 0.9097744360902256,
+      "f1_weighted": 0.9095939849624061,
+      "error_rate": 0.08999999999999997,
+      "fit_time_s": 171.4
     },
     "logreg": {
       "accuracy": 0.964,
@@ -601,647 +601,12 @@
       "normal": 3
     },
     "promptlearn": {
-      "accuracy": 0.8648648648648649,
-      "balanced_accuracy": 0.925,
-      "f1_macro": 0.9264087468460891,
-      "f1_weighted": 0.8641829381947129,
-      "error_rate": 0.1351351351351351,
-      "fit_time_s": 205.11
-    },
-    "logreg": {
-      "accuracy": 0.8648648648648649,
-      "balanced_accuracy": 0.6875,
-      "f1_macro": 0.6852159468438539,
-      "f1_weighted": 0.8522043638322708,
-      "error_rate": 0.1351351351351351,
-      "log_loss": 0.28254349154122393,
-      "roc_auc_ovr": 0.9814171122994653,
-      "fit_time_s": 0.03
-    },
-    "xgboost": {
-      "accuracy": 0.8918918918918919,
-      "balanced_accuracy": 0.7041666666666666,
-      "f1_macro": 0.7003284072249589,
-      "f1_weighted": 0.8795544312785692,
-      "error_rate": 0.10810810810810811,
-      "log_loss": 0.4461190402507782,
-      "roc_auc_ovr": 0.8960710041592395,
-      "fit_time_s": 0.06
-    },
-    "tabpfn": {
-      "accuracy": 0.8918918918918919,
-      "balanced_accuracy": 0.7041666666666666,
-      "f1_macro": 0.7003284072249589,
-      "f1_weighted": 0.8795544312785692,
-      "error_rate": 0.10810810810810811,
-      "log_loss": 0.2796633541584015,
-      "roc_auc_ovr": 0.9888146167557932,
-      "fit_time_s": 0.81
-    }
-  },
-  {
-    "dataset": "adult",
-    "model_id": "vertex_ai/gemini-3.5-flash+web",
-    "n_rows": 2000,
-    "n_cols": 14,
-    "n_classes": 2,
-    "class_map": {
-      "<=50K": 0,
-      ">50K": 1
-    },
-    "promptlearn": {
-      "accuracy": 0.724,
-      "balanced_accuracy": 0.7869286147974672,
-      "f1_macro": 0.7005208333333334,
-      "f1_weighted": 0.7434541666666667,
-      "error_rate": 0.276,
-      "fit_time_s": 128.71
-    },
-    "logreg": {
-      "accuracy": 0.864,
-      "balanced_accuracy": 0.7990285367334548,
-      "f1_macro": 0.8091774425287357,
-      "f1_weighted": 0.8615452586206896,
-      "error_rate": 0.136,
-      "log_loss": 0.3367940524823399,
-      "roc_auc": 0.8916644982218752,
-      "fit_time_s": 0.04
-    },
-    "xgboost": {
-      "accuracy": 0.856,
-      "balanced_accuracy": 0.7854107034434903,
-      "f1_macro": 0.7967250141163185,
-      "f1_weighted": 0.8529264822134387,
-      "error_rate": 0.14400000000000002,
-      "log_loss": 0.33712372183799744,
-      "roc_auc": 0.8983541504033308,
-      "fit_time_s": 0.21
-    },
-    "tabpfn": {
-      "accuracy": 0.864,
-      "balanced_accuracy": 0.8018041460664411,
-      "f1_macro": 0.8103144317243534,
-      "f1_weighted": 0.8619817455535471,
-      "error_rate": 0.136,
-      "log_loss": 0.30963701009750366,
-      "roc_auc": 0.9128718882817244,
-      "fit_time_s": 2.86
-    }
-  },
-  {
-    "dataset": "credit-g",
-    "model_id": "vertex_ai/gemini-3.5-flash+web",
-    "n_rows": 1000,
-    "n_cols": 20,
-    "n_classes": 2,
-    "class_map": {
-      "bad": 0,
-      "good": 1
-    },
-    "promptlearn": {
-      "accuracy": 0.72,
-      "balanced_accuracy": 0.739047619047619,
-      "f1_macro": 0.7016503000545553,
-      "f1_weighted": 0.7312465902891435,
-      "error_rate": 0.28,
-      "fit_time_s": 129.63
-    },
-    "logreg": {
-      "accuracy": 0.724,
-      "balanced_accuracy": 0.6428571428571429,
-      "f1_macro": 0.649923896499239,
-      "f1_weighted": 0.714337899543379,
-      "error_rate": 0.276,
-      "log_loss": 0.5215249559996268,
-      "roc_auc": 0.7748571428571429,
-      "fit_time_s": 0.03
-    },
-    "xgboost": {
-      "accuracy": 0.768,
-      "balanced_accuracy": 0.6857142857142857,
-      "f1_macro": 0.6985446985446986,
-      "f1_weighted": 0.7564241164241166,
-      "error_rate": 0.23199999999999998,
-      "log_loss": 0.5478785634040833,
-      "roc_auc": 0.7715047619047619,
-      "fit_time_s": 0.05
-    },
-    "tabpfn": {
-      "accuracy": 0.764,
-      "balanced_accuracy": 0.6942857142857143,
-      "f1_macro": 0.7034043152158613,
-      "f1_weighted": 0.7570288150248337,
-      "error_rate": 0.236,
-      "log_loss": 0.48811987042427063,
-      "roc_auc": 0.7945904761904762,
-      "fit_time_s": 1.24
-    }
-  },
-  {
-    "dataset": "bank-marketing",
-    "model_id": "vertex_ai/gemini-3.5-flash+web",
-    "n_rows": 2000,
-    "n_cols": 16,
-    "n_classes": 2,
-    "class_map": {
-      "1": 0,
-      "2": 1
-    },
-    "promptlearn": {
-      "accuracy": 0.708,
-      "balanced_accuracy": 0.7917955516276329,
-      "f1_macro": 0.6186715142397459,
-      "f1_weighted": 0.7574628805449342,
-      "error_rate": 0.29200000000000004,
-      "fit_time_s": 156.11
-    },
-    "logreg": {
-      "accuracy": 0.868,
-      "balanced_accuracy": 0.6062012078362056,
-      "f1_macro": 0.6266799402687905,
-      "f1_weighted": 0.8523922349427577,
-      "error_rate": 0.132,
-      "log_loss": 0.2748180578146323,
-      "roc_auc": 0.8805052290469878,
-      "fit_time_s": 0.03
-    },
-    "xgboost": {
-      "accuracy": 0.866,
-      "balanced_accuracy": 0.6258285461776403,
-      "f1_macro": 0.6435222133546156,
-      "f1_weighted": 0.8552985368449055,
-      "error_rate": 0.134,
-      "log_loss": 0.3113917112350464,
-      "roc_auc": 0.8533289144203859,
-      "fit_time_s": 0.05
-    },
-    "tabpfn": {
-      "accuracy": 0.888,
-      "balanced_accuracy": 0.6868463691265282,
-      "f1_macro": 0.7093506062115927,
-      "f1_weighted": 0.8807081880086365,
-      "error_rate": 0.11199999999999999,
-      "log_loss": 0.24617832899093628,
-      "roc_auc": 0.8984754750331418,
-      "fit_time_s": 0.89
-    }
-  },
-  {
-    "dataset": "mushroom",
-    "model_id": "vertex_ai/gemini-3.5-flash+web",
-    "n_rows": 2000,
-    "n_cols": 22,
-    "n_classes": 2,
-    "class_map": {
-      "e": 0,
-      "p": 1
-    },
-    "promptlearn": {
-      "accuracy": 1.0,
-      "balanced_accuracy": 1.0,
-      "f1_macro": 1.0,
-      "f1_weighted": 1.0,
-      "error_rate": 0.0,
-      "fit_time_s": 115.4
-    },
-    "logreg": {
-      "accuracy": 1.0,
-      "balanced_accuracy": 1.0,
-      "f1_macro": 1.0,
-      "f1_weighted": 1.0,
-      "error_rate": 0.0,
-      "log_loss": 0.013805982563205334,
-      "roc_auc": 1.0,
-      "fit_time_s": 0.03
-    },
-    "xgboost": {
-      "accuracy": 1.0,
-      "balanced_accuracy": 1.0,
-      "f1_macro": 1.0,
-      "f1_weighted": 1.0,
-      "error_rate": 0.0,
-      "log_loss": 0.002976528601720929,
-      "roc_auc": 1.0,
-      "fit_time_s": 0.05
-    },
-    "tabpfn": {
-      "accuracy": 1.0,
-      "balanced_accuracy": 1.0,
-      "f1_macro": 1.0,
-      "f1_weighted": 1.0,
-      "error_rate": 0.0,
-      "log_loss": 0.0009527491638436913,
-      "roc_auc": 1.0,
-      "fit_time_s": 0.89
-    }
-  },
-  {
-    "dataset": "car",
-    "model_id": "vertex_ai/gemini-3.5-flash+web",
-    "n_rows": 1728,
-    "n_cols": 6,
-    "n_classes": 4,
-    "class_map": {
-      "acc": 0,
-      "good": 1,
-      "unacc": 2,
-      "vgood": 3
-    },
-    "promptlearn": {
-      "error": "LLM call failed: list index out of range"
-    },
-    "logreg": {
-      "accuracy": 0.9097222222222222,
-      "balanced_accuracy": 0.7727276863715783,
-      "f1_macro": 0.7871440397350994,
-      "f1_weighted": 0.907924944812362,
-      "error_rate": 0.09027777777777779,
-      "log_loss": 0.20563063396817768,
-      "roc_auc_ovr": 0.9902566157872431,
-      "fit_time_s": 0.03
-    },
-    "xgboost": {
-      "accuracy": 0.9837962962962963,
-      "balanced_accuracy": 0.9924453382838284,
-      "f1_macro": 0.9882049376251087,
-      "f1_weighted": 0.9839345239603482,
-      "error_rate": 0.01620370370370372,
-      "log_loss": 0.060274917632341385,
-      "roc_auc_ovr": 0.9995327894630202,
-      "fit_time_s": 0.13
-    },
-    "tabpfn": {
-      "accuracy": 1.0,
-      "balanced_accuracy": 1.0,
-      "f1_macro": 1.0,
-      "f1_weighted": 1.0,
-      "error_rate": 0.0,
-      "log_loss": 0.012020611204206944,
-      "roc_auc_ovr": 1.0,
-      "fit_time_s": 0.85
-    }
-  },
-  {
-    "dataset": "nursery",
-    "model_id": "vertex_ai/gemini-3.5-flash+web",
-    "n_rows": 2000,
-    "n_cols": 8,
-    "n_classes": 4,
-    "class_map": {
-      "1": 0,
-      "3": 1,
-      "4": 2,
-      "5": 3
-    },
-    "promptlearn": {
-      "accuracy": 0.866,
-      "balanced_accuracy": 0.7819401840490797,
-      "f1_macro": 0.7823328969659633,
-      "f1_weighted": 0.8662349453257354,
-      "error_rate": 0.134,
-      "fit_time_s": 122.95
-    },
-    "logreg": {
-      "accuracy": 0.932,
-      "balanced_accuracy": 0.8005683063102542,
-      "f1_macro": 0.8366888518317738,
-      "f1_weighted": 0.9286703769612118,
-      "error_rate": 0.06799999999999995,
-      "log_loss": 0.1921312670297224,
-      "roc_auc_ovr": 0.9897957062673379,
-      "fit_time_s": 0.03
-    },
-    "xgboost": {
-      "accuracy": 0.988,
-      "balanced_accuracy": 0.9744741454864154,
-      "f1_macro": 0.974398052296603,
-      "f1_weighted": 0.9879748485545587,
-      "error_rate": 0.01200000000000001,
-      "log_loss": 0.04765864461660385,
-      "roc_auc_ovr": 0.9996801734366441,
-      "fit_time_s": 0.09
-    },
-    "tabpfn": {
-      "accuracy": 0.99,
-      "balanced_accuracy": 0.9596844872918493,
-      "f1_macro": 0.9746010954989284,
-      "f1_weighted": 0.989858633007859,
-      "error_rate": 0.010000000000000009,
-      "log_loss": 0.026734117418527603,
-      "roc_auc_ovr": 0.9998995406090722,
-      "fit_time_s": 0.84
-    }
-  },
-  {
-    "dataset": "vote",
-    "model_id": "vertex_ai/gemini-3.5-flash+web",
-    "n_rows": 435,
-    "n_cols": 16,
-    "n_classes": 2,
-    "class_map": {
-      "democrat": 0,
-      "republican": 1
-    },
-    "promptlearn": {
-      "accuracy": 0.9724770642201835,
-      "balanced_accuracy": 0.9731698649609097,
-      "f1_macro": 0.9710747456877488,
-      "f1_weighted": 0.9725354941590348,
-      "error_rate": 0.02752293577981646,
-      "fit_time_s": 125.13
-    },
-    "logreg": {
-      "accuracy": 0.9541284403669725,
-      "balanced_accuracy": 0.949360341151386,
-      "f1_macro": 0.9513609995537706,
-      "f1_weighted": 0.9540220003356955,
-      "error_rate": 0.04587155963302747,
-      "log_loss": 0.1215683157388143,
-      "roc_auc": 0.9904051172707888,
-      "fit_time_s": 0.02
-    },
-    "xgboost": {
-      "accuracy": 0.981651376146789,
-      "balanced_accuracy": 0.9806325515280738,
-      "f1_macro": 0.9806325515280738,
-      "f1_weighted": 0.981651376146789,
-      "error_rate": 0.01834862385321101,
-      "log_loss": 0.0880436822772026,
-      "roc_auc": 0.9911158493248046,
-      "fit_time_s": 0.03
-    },
-    "tabpfn": {
-      "accuracy": 0.981651376146789,
-      "balanced_accuracy": 0.9806325515280738,
-      "f1_macro": 0.9806325515280738,
-      "f1_weighted": 0.981651376146789,
-      "error_rate": 0.01834862385321101,
-      "log_loss": 0.09291780740022659,
-      "roc_auc": 0.9936034115138592,
-      "fit_time_s": 0.83
-    }
-  },
-  {
-    "dataset": "tic-tac-toe",
-    "model_id": "vertex_ai/gemini-3.5-flash+web",
-    "n_rows": 958,
-    "n_cols": 9,
-    "n_classes": 2,
-    "class_map": {
-      "negative": 0,
-      "positive": 1
-    },
-    "promptlearn": {
-      "error": "'x,o,b'"
-    },
-    "logreg": {
-      "accuracy": 0.9791666666666666,
-      "balanced_accuracy": 0.9698795180722892,
-      "f1_macro": 0.9766350590938297,
-      "f1_weighted": 0.9790064383392719,
-      "error_rate": 0.02083333333333337,
-      "log_loss": 0.21805792440320423,
-      "roc_auc": 0.9864170056020259,
-      "fit_time_s": 0.02
-    },
-    "xgboost": {
-      "accuracy": 0.9958333333333333,
-      "balanced_accuracy": 0.9939759036144578,
-      "f1_macro": 0.9953823953823954,
-      "f1_weighted": 0.9958273208273208,
-      "error_rate": 0.004166666666666652,
-      "log_loss": 0.048983704298734665,
-      "roc_auc": 1.0,
-      "fit_time_s": 0.04
-    },
-    "tabpfn": {
-      "accuracy": 0.9791666666666666,
-      "balanced_accuracy": 0.9698795180722892,
-      "f1_macro": 0.9766350590938297,
-      "f1_weighted": 0.9790064383392719,
-      "error_rate": 0.02083333333333337,
-      "log_loss": 0.033348582684993744,
-      "roc_auc": 0.9999232599186555,
-      "fit_time_s": 0.83
-    }
-  },
-  {
-    "dataset": "kr-vs-kp",
-    "model_id": "vertex_ai/gemini-3.5-flash+web",
-    "n_rows": 2000,
-    "n_cols": 36,
-    "n_classes": 2,
-    "class_map": {
-      "nowin": 0,
-      "won": 1
-    },
-    "promptlearn": {
-      "accuracy": 0.848,
-      "balanced_accuracy": 0.8514423076923077,
-      "f1_macro": 0.8475878776210874,
-      "f1_weighted": 0.8472708604065392,
-      "error_rate": 0.15200000000000002,
-      "fit_time_s": 288.96
-    },
-    "logreg": {
-      "accuracy": 0.964,
-      "balanced_accuracy": 0.9639423076923077,
-      "f1_macro": 0.9639423076923077,
-      "f1_weighted": 0.964,
-      "error_rate": 0.03600000000000003,
-      "log_loss": 0.11153865948464041,
-      "roc_auc": 0.9953846153846153,
-      "fit_time_s": 0.04
-    },
-    "xgboost": {
-      "accuracy": 0.992,
-      "balanced_accuracy": 0.9916666666666667,
-      "f1_macro": 0.9919815254346014,
-      "f1_weighted": 0.9919969209057669,
-      "error_rate": 0.008000000000000007,
-      "log_loss": 0.04252111166715622,
-      "roc_auc": 0.9998557692307692,
-      "fit_time_s": 0.06
-    },
-    "tabpfn": {
-      "accuracy": 0.998,
-      "balanced_accuracy": 0.9979166666666667,
-      "f1_macro": 0.9979964657656105,
-      "f1_weighted": 0.9979998317031243,
-      "error_rate": 0.0020000000000000018,
-      "log_loss": 0.01022480707615614,
-      "roc_auc": 1.0,
-      "fit_time_s": 0.98
-    }
-  },
-  {
-    "dataset": "monks-2",
-    "model_id": "vertex_ai/gemini-3.5-flash+web",
-    "n_rows": 601,
-    "n_cols": 6,
-    "n_classes": 2,
-    "class_map": {
-      "0": 0,
-      "1": 1
-    },
-    "promptlearn": {
-      "error": "'a1 = 1, a2 = 1, a3 = 1, a4 = 1, a5 = 1, a6 = 1'"
-    },
-    "logreg": {
-      "accuracy": 0.5827814569536424,
-      "balanced_accuracy": 0.4444444444444444,
-      "f1_macro": 0.3682008368200837,
-      "f1_weighted": 0.4828063953005071,
-      "error_rate": 0.41721854304635764,
-      "log_loss": 0.6614513474582837,
-      "roc_auc": 0.5184537684537684,
-      "fit_time_s": 0.02
-    },
-    "xgboost": {
-      "accuracy": 0.9006622516556292,
-      "balanced_accuracy": 0.905982905982906,
-      "f1_macro": 0.8931654167256262,
-      "f1_weighted": 0.9019741977683796,
-      "error_rate": 0.09933774834437081,
-      "log_loss": 0.2855679988861084,
-      "roc_auc": 0.9489121989121989,
-      "fit_time_s": 0.03
-    },
-    "tabpfn": {
-      "accuracy": 1.0,
-      "balanced_accuracy": 1.0,
-      "f1_macro": 1.0,
-      "f1_weighted": 1.0,
-      "error_rate": 0.0,
-      "log_loss": 0.00029537364025600255,
-      "roc_auc": 1.0,
-      "fit_time_s": 1.05
-    }
-  },
-  {
-    "dataset": "soybean",
-    "model_id": "vertex_ai/gemini-3.5-flash+web",
-    "n_rows": 683,
-    "n_cols": 35,
-    "n_classes": 19,
-    "class_map": {
-      "2-4-d-injury": 0,
-      "alternarialeaf-spot": 1,
-      "anthracnose": 2,
-      "bacterial-blight": 3,
-      "bacterial-pustule": 4,
-      "brown-spot": 5,
-      "brown-stem-rot": 6,
-      "charcoal-rot": 7,
-      "cyst-nematode": 8,
-      "diaporthe-pod-&-stem-blight": 9,
-      "diaporthe-stem-canker": 10,
-      "downy-mildew": 11,
-      "frog-eye-leaf-spot": 12,
-      "herbicide-injury": 13,
-      "phyllosticta-leaf-spot": 14,
-      "phytophthora-rot": 15,
-      "powdery-mildew": 16,
-      "purple-seed-stain": 17,
-      "rhizoctonia-root-rot": 18
-    },
-    "promptlearn": {
-      "error": "'diaporthe-stem-canker, charcoal-rot, rhizoctonia-root-rot, phytophthora-rot, brown-stem-rot, powdery-mildew, downy-mildew, brown-spot, bacterial-blight, bacterial-pustule, purple-seed-stain, anthracnose, phyllosticta-leaf-spot, alternarialeaf-spot, frog-eye-leaf-spot, diaporthe-pod-&-stem-blight, cyst-nematode, 2-4-d-injury, herbicide-injury'"
-    },
-    "logreg": {
-      "accuracy": 0.8713450292397661,
-      "balanced_accuracy": 0.9142084460162263,
-      "f1_macro": 0.9173939751339131,
-      "f1_weighted": 0.8725492926215321,
-      "error_rate": 0.1286549707602339,
-      "log_loss": 0.3087824425393164,
-      "roc_auc_ovr": 0.9969286516691812,
-      "fit_time_s": 0.06
-    },
-    "xgboost": {
-      "accuracy": 0.8771929824561403,
-      "balanced_accuracy": 0.9057624297898897,
-      "f1_macro": 0.9171336587131522,
-      "f1_weighted": 0.8789398443997449,
-      "error_rate": 0.1228070175438597,
-      "log_loss": 0.3099304139614105,
-      "roc_auc_ovr": 0.9964837518172138,
-      "fit_time_s": 0.21
-    },
-    "tabpfn": {
-      "accuracy": 0.9473684210526315,
-      "balanced_accuracy": 0.9711670480549198,
-      "f1_macro": 0.9620333142899966,
-      "f1_weighted": 0.948530807806657,
-      "error_rate": 0.052631578947368474,
-      "log_loss": 0.14943641424179077,
-      "roc_auc_ovr": 0.9985835977964675,
-      "fit_time_s": 0.88
-    }
-  },
-  {
-    "dataset": "hepatitis",
-    "model_id": "vertex_ai/gemini-3.5-flash+web",
-    "n_rows": 155,
-    "n_cols": 19,
-    "n_classes": 2,
-    "class_map": {
-      "DIE": 0,
-      "LIVE": 1
-    },
-    "promptlearn": {
-      "error": "Single '}' encountered in format string"
-    },
-    "logreg": {
-      "accuracy": 0.8717948717948718,
-      "balanced_accuracy": 0.780241935483871,
-      "f1_macro": 0.7936507936507936,
-      "f1_weighted": 0.8685388685388685,
-      "error_rate": 0.1282051282051282,
-      "log_loss": 0.3412437213472291,
-      "roc_auc": 0.8991935483870968,
-      "fit_time_s": 0.02
-    },
-    "xgboost": {
-      "accuracy": 0.8461538461538461,
-      "balanced_accuracy": 0.7641129032258065,
-      "f1_macro": 0.7641129032258065,
-      "f1_weighted": 0.8461538461538461,
-      "error_rate": 0.15384615384615385,
-      "log_loss": 0.40912771224975586,
-      "roc_auc": 0.8669354838709677,
-      "fit_time_s": 0.04
-    },
-    "tabpfn": {
-      "accuracy": 0.8717948717948718,
-      "balanced_accuracy": 0.780241935483871,
-      "f1_macro": 0.7936507936507936,
-      "f1_weighted": 0.8685388685388685,
-      "error_rate": 0.1282051282051282,
-      "log_loss": 0.30252620577812195,
-      "roc_auc": 0.9112903225806451,
-      "fit_time_s": 0.85
-    }
-  },
-  {
-    "dataset": "lymph",
-    "model_id": "vertex_ai/gemini-3.5-flash+web",
-    "n_rows": 148,
-    "n_cols": 18,
-    "n_classes": 4,
-    "class_map": {
-      "fibrosis": 0,
-      "malign_lymph": 1,
-      "metastases": 2,
-      "normal": 3
-    },
-    "promptlearn": {
-      "accuracy": 0.7837837837837838,
-      "balanced_accuracy": 0.6416666666666666,
-      "f1_macro": 0.6397306397306397,
-      "f1_weighted": 0.7695877695877695,
-      "error_rate": 0.21621621621621623,
-      "fit_time_s": 207.08
+      "accuracy": 0.8108108108108109,
+      "balanced_accuracy": 0.8958333333333334,
+      "f1_macro": 0.8969722455845248,
+      "f1_weighted": 0.809856113472598,
+      "error_rate": 0.18918918918918914,
+      "fit_time_s": 167.5
     },
     "logreg": {
       "accuracy": 0.8648648648648649,
