@@ -6,7 +6,7 @@ For each dataset:
   3. Evaluate logreg and xgboost on X_train/X_test — both with and without AFE
   4. Record skip_reason_ and stats_ so we can verify the skip logic fired correctly
 
-Writes results to benchmarks/progression_results_afe/metrics_afe.json
+Writes results to benchmarks/progression_results/metrics_afe.json
 and generates fe_per_dataset_lift_afe.png next to it.
 
 Usage
@@ -50,7 +50,7 @@ logger = logging.getLogger("afe_benchmark")
 
 FE_MODEL = "gpt-5.5"
 MAX_ROWS = 2000
-OUT_DIR = Path("benchmarks/progression_results_afe2")
+OUT_DIR = Path("benchmarks/progression_results")
 
 DATASETS = {
     "adult": ("adult", 2),
