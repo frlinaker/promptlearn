@@ -22,7 +22,7 @@ All numeric feature values may be provided as strings or numbers. At the top of 
 
 Your function must always return an integer class for any input, even if some features are unknown, missing, or out-of-vocabulary. Use a fallback/default prediction (such as 0) if no match is found.
 
-For categorical inputs, include an really exhaustive list of keys (try to get to 100+) in any mapping you make, i.e. names of countries, animals, colors, fruits, etc.
+For categorical inputs, aim for complete coverage of all plausible real-world values in any mapping you make — not just the values seen in the data sample.
 
 If there is no data given, analyze the names of the input and output columns (assume the last column is the output or target column) and reason to what will be expected as an outcome, and generate code based on that.
 

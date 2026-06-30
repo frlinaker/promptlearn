@@ -19,7 +19,7 @@ All numeric feature values may be provided as strings or numbers. At the top of 
 
 Your function must always return a valid float or int prediction for any input, even if some features are unknown, missing, or out-of-vocabulary. Use a fallback/default prediction (such as 0.0) if no match is found.
 
-For categorical inputs, include an exhaustive mapping if possible (e.g., known country names, brands, colors), but ALWAYS include a fallback/default for unlisted keys.
+For categorical inputs, aim for complete coverage of all plausible real-world values in any mapping you make — not just the values seen in the data sample. Always include a fallback/default for any unlisted keys.
 
 If there is no data given, analyze the names of the input and output columns (assume the last column is the output/target column) and reason what will be expected as an outcome, and generate code based on that.
 
