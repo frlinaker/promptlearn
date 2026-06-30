@@ -11,8 +11,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-from pathlib import Path
-
 from promptlearn import PromptClassifier, PromptRegressor
 
 
@@ -28,8 +26,59 @@ def _split(X, y, test_size: float, random_state: int = 42):
     return train_test_split(X, y, test_size=test_size, random_state=random_state)
 
 
+_PROVIDERS = [
+    {
+        "name": "OpenAI",
+        "env": "OPENAI_API_KEY",
+        "model": "gpt-4o-mini",
+    },
+    {
+        "name": "Anthropic",
+        "env": "ANTHROPIC_API_KEY",
+        "model": "claude-haiku-4-5-20251001",
+    },
+    {
+        "name": "Google (Vertex AI)",
+        "env": "GOOGLE_APPLICATION_CREDENTIALS",
+        "model": "vertex_ai/gemini-2.5-flash",
+    },
+]
+
+_CHECK_PROMPT = "Reply with the single word OK and nothing else."
+
+
+def cmd_check(_args: argparse.Namespace) -> int:
+    import os
+    import litellm
+
+    litellm.suppress_debug_info = True
+
+    candidates = [p for p in _PROVIDERS if os.environ.get(p["env"])]
+
+    if not candidates:
+        keys = ", ".join(p["env"] for p in _PROVIDERS)
+        print(f"No API keys found. Set at least one of: {keys}")
+        return 1
+
+    any_failed = False
+    for p in candidates:
+        print(f"  {p['name']} ({p['model']}) ... ", end="", flush=True)
+        try:
+            resp = litellm.completion(
+                model=p["model"],
+                messages=[{"role": "user", "content": _CHECK_PROMPT}],
+                max_tokens=50,
+            )
+            reply = str(resp.choices[0].message.content).strip()
+            print(f"OK  (replied: {reply!r})")
+        except Exception as e:
+            print(f"FAILED  ({e})")
+            any_failed = True
+
+    return 1 if any_failed else 0
+
+
 def cmd_fit(args: argparse.Namespace) -> int:
-    import numpy as np
     from sklearn.metrics import accuracy_score, r2_score
 
     df = _load_csv(args.file)
@@ -106,6 +155,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     sub = parser.add_subparsers(dest="command")
 
+    sub.add_parser("check", help="Check connectivity to configured LLM providers")
+
     fit_p = sub.add_parser("fit", help="Fit a model on a CSV and report accuracy")
     fit_p.add_argument("file", help="Path to CSV file")
     fit_p.add_argument("--target", required=True, help="Name of the target column")
@@ -134,6 +185,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command is None:
         parser.print_help()
         return 0
+
+    if args.command == "check":
+        return cmd_check(args)
 
     if args.command == "fit":
         return cmd_fit(args)

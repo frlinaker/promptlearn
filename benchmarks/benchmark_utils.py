@@ -1,68 +1,21 @@
-#!/usr/bin/env python
-# DEPRECATED — use the split scripts instead:
-#
-#   benchmarks/run_baselines.py    — run logreg / XGBoost / TabPFN baselines
-#   benchmarks/run_promptlearn.py  — run promptlearn for one LLM model
-#   benchmarks/collate.py          — read all cached results, print table, save charts
-#
-# This script continues to work as before and writes results to the same cache
-# directory, so existing cache files remain compatible with all three new scripts.
-"""Model-progression benchmark: accuracy of promptlearn across OpenAI model generations.
+"""Shared utilities for the promptlearn model-progression benchmarks.
 
-DEPRECATED: This monolithic script has been superseded by three focused scripts:
-
-  benchmarks/run_baselines.py    — runs logreg / XGBoost / TabPFN independently
-  benchmarks/run_promptlearn.py  — runs promptlearn for a single LLM model
-  benchmarks/collate.py          — collates all cached results into tables + charts
-
-This file is kept for backwards compatibility.  New runs should use the split
-scripts above; they share the same cache directory and file naming, so results
-from this script and from the new scripts can be freely mixed.
-
-Runs PromptClassifier (FE off) on the curated OpenML suite for each model in
-MODEL_PROGRESSION and records per-dataset accuracy alongside logistic regression
-and XGBoost baselines. Results are cached per model so reruns are cheap.
-
-The intended output is a timeline chart where:
-  - x-axis  = model release date (oldest → newest)
-  - y-axis  = mean accuracy across datasets
-  - lines   = promptlearn (rising), logreg + xgboost (flat baselines)
-
-Examples
---------
-    # full run across all progression models
-    python benchmarks/run_model_progression.py
-
-    # subset of models or datasets for a quick smoke-test
-    python benchmarks/run_model_progression.py --models gpt-4o gpt-5.5 --datasets adult credit-g
-
-    # force fresh LLM calls (ignore cache)
-    python benchmarks/run_model_progression.py --no-cache
-
-    # write metrics JSON + plots
-    python benchmarks/run_model_progression.py --output-dir benchmarks/progression_results
+This module is imported by run_baselines.py, run_promptlearn.py, and collate.py.
+It must NOT import from promptlearn itself — only the runner scripts do that.
 """
 
 from __future__ import annotations
 
-import argparse
 import hashlib
 import json
 import logging
-import os
-import sys
 import time
 from datetime import date
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from dotenv import load_dotenv
-
-load_dotenv()
-
 from sklearn.datasets import fetch_openml
-from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     accuracy_score,
     balanced_accuracy_score,
@@ -70,10 +23,7 @@ from sklearn.metrics import (
     log_loss,
     roc_auc_score,
 )
-from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelBinarizer
-
-from promptlearn import PromptClassifier, PromptFeatureEngineer
 
 logger = logging.getLogger("promptlearn.progression")
 
@@ -106,14 +56,14 @@ MODEL_PROGRESSION = [
     {
         "model_id": "gpt-5.4-mini",
         "label": "GPT-5.4 mini",
-        "release_date": date(2026, 3, 1),
+        "release_date": date(2026, 3, 17),  # GA: Mar 17 2026
         "family": "GPT-5",
         "provider": "openai",
     },
     {
         "model_id": "gpt-5.5",
         "label": "GPT-5.5",
-        "release_date": date(2026, 4, 1),
+        "release_date": date(2026, 4, 23),  # GA: Apr 23 2026
         "family": "GPT-5",
         "provider": "openai",
     },
@@ -121,24 +71,16 @@ MODEL_PROGRESSION = [
         "model_id": "gpt-5.5+web",
         "base_model_id": "gpt-5.5",
         "label": "GPT-5.5 +web",
-        "release_date": date(2026, 4, 1),
+        "release_date": date(2026, 4, 23),  # GA: Apr 23 2026
         "family": "GPT-5",
         "provider": "openai",
         "web_search": True,
     },
-    # Google Gemini (via Vertex AI)
-    {
-        "model_id": "vertex_ai/gemini-2.5-flash-lite",
-        "label": "Gemini 2.5 Flash Lite",
-        "release_date": date(2025, 7, 22),
-        "family": "Gemini 2.5",
-        "provider": "google",
-        "vertex_region": "us-central1",
-    },
+    # Google Gemini (via Vertex AI) — ordered oldest GA → newest
     {
         "model_id": "vertex_ai/gemini-2.5-flash",
         "label": "Gemini 2.5 Flash",
-        "release_date": date(2025, 6, 17),
+        "release_date": date(2025, 5, 20),  # GA: May 20 2025
         "family": "Gemini 2.5",
         "provider": "google",
         "vertex_region": "us-central1",
@@ -146,7 +88,15 @@ MODEL_PROGRESSION = [
     {
         "model_id": "vertex_ai/gemini-2.5-pro",
         "label": "Gemini 2.5 Pro",
-        "release_date": date(2025, 6, 17),
+        "release_date": date(2025, 6, 5),  # GA: Jun 5 2025
+        "family": "Gemini 2.5",
+        "provider": "google",
+        "vertex_region": "us-central1",
+    },
+    {
+        "model_id": "vertex_ai/gemini-2.5-flash-lite",
+        "label": "Gemini 2.5 Flash Lite",
+        "release_date": date(2025, 7, 22),  # GA: Jul 22 2025
         "family": "Gemini 2.5",
         "provider": "google",
         "vertex_region": "us-central1",
@@ -186,24 +136,6 @@ DEFAULT_DATASETS = {
     "hepatitis": ("hepatitis", 1),
     "lymph": ("lymph", 1),
 }
-
-
-def _xgb_classifier():
-    try:
-        from xgboost import XGBClassifier
-    except ImportError:
-        return None
-    return XGBClassifier(
-        n_estimators=200, max_depth=4, learning_rate=0.1, n_jobs=4, verbosity=0
-    )
-
-
-def _tabpfn_classifier():
-    try:
-        from tabpfn import TabPFNClassifier
-    except ImportError:
-        return None
-    return TabPFNClassifier()
 
 
 def load_dataset(openml_name: str, version: int, max_rows: int):
@@ -267,326 +199,22 @@ def _baseline_cache_key(dataset: str, max_rows: int) -> str:
     return hashlib.sha1(raw.encode()).hexdigest()[:16]
 
 
-def run_dataset_baselines(
-    dataset: str,
-    spec: tuple,
-    max_rows: int,
-    cache_dir: Path | None,
-    skip_cache_read: bool = False,
-) -> dict:
-    """Run logreg, xgboost, and TabPFN once per dataset (model-independent)."""
-    cache_file = (
-        cache_dir / f"baselines-{dataset}-{_baseline_cache_key(dataset, max_rows)}.json"
-        if cache_dir
-        else None
-    )
-    if cache_file and cache_file.exists() and not skip_cache_read:
-        logger.info("[%s] baselines cached", dataset)
-        with open(cache_file) as f:
-            return json.load(f)
-
-    openml_name, version = spec
-    logger.info("[%s] running baselines…", dataset)
-    X, y, class_map, _ = load_dataset(openml_name, version, max_rows)
-    n_classes = len(class_map)
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.25, random_state=42, stratify=y
-    )
-
-    result: dict = {}
-
-    # logreg
-    t0 = time.time()
+def _xgb_classifier():
     try:
-        from sklearn.pipeline import Pipeline
-        from sklearn.preprocessing import OneHotEncoder, StandardScaler
-        from sklearn.compose import ColumnTransformer
-        from sklearn.impute import SimpleImputer
-
-        cat_cols = X_train.select_dtypes(
-            include=["object", "category"]
-        ).columns.tolist()
-        num_cols = [c for c in X_train.columns if c not in cat_cols]
-        transformers = []
-        if cat_cols:
-            transformers.append(
-                (
-                    "cat",
-                    Pipeline(
-                        [
-                            ("imp", SimpleImputer(strategy="most_frequent")),
-                            (
-                                "enc",
-                                OneHotEncoder(
-                                    handle_unknown="ignore", sparse_output=False
-                                ),
-                            ),
-                        ]
-                    ),
-                    cat_cols,
-                )
-            )
-        if num_cols:
-            transformers.append(
-                (
-                    "num",
-                    Pipeline(
-                        [
-                            ("imp", SimpleImputer(strategy="mean")),
-                            ("scl", StandardScaler()),
-                        ]
-                    ),
-                    num_cols,
-                )
-            )
-        preproc = ColumnTransformer(transformers, remainder="passthrough")
-        lr = Pipeline([("pre", preproc), ("clf", LogisticRegression(max_iter=1000))])
-        lr.fit(X_train, y_train)
-        y_pred_lr = lr.predict(X_test)
-        y_proba_lr = lr.predict_proba(X_test) if hasattr(lr, "predict_proba") else None
-        result["logreg"] = _rich_metrics(
-            np.array(y_test), y_pred_lr, y_proba_lr, n_classes
-        )
-        result["logreg"]["fit_time_s"] = round(time.time() - t0, 2)
-    except Exception as e:
-        logger.warning("[%s] logreg failed: %s", dataset, e)
-        result["logreg"] = {"error": str(e)}
-
-    # xgboost
-    xgb = _xgb_classifier()
-    if xgb is not None:
-        t0 = time.time()
-        try:
-            from sklearn.pipeline import Pipeline
-            from sklearn.preprocessing import OrdinalEncoder
-            from sklearn.compose import ColumnTransformer
-            from sklearn.impute import SimpleImputer
-
-            cat_cols = X_train.select_dtypes(
-                include=["object", "category"]
-            ).columns.tolist()
-            num_cols = [c for c in X_train.columns if c not in cat_cols]
-            transformers = []
-            if cat_cols:
-                transformers.append(
-                    (
-                        "cat",
-                        Pipeline(
-                            [
-                                ("imp", SimpleImputer(strategy="most_frequent")),
-                                (
-                                    "enc",
-                                    OrdinalEncoder(
-                                        handle_unknown="use_encoded_value",
-                                        unknown_value=-1,
-                                    ),
-                                ),
-                            ]
-                        ),
-                        cat_cols,
-                    )
-                )
-            if num_cols:
-                transformers.append(("num", SimpleImputer(strategy="mean"), num_cols))
-            preproc = ColumnTransformer(transformers, remainder="passthrough")
-            xgb_pipe = Pipeline([("pre", preproc), ("clf", xgb)])
-            xgb_pipe.fit(X_train, y_train)
-            y_pred_xgb = xgb_pipe.predict(X_test)
-            y_proba_xgb = (
-                xgb_pipe.predict_proba(X_test)
-                if hasattr(xgb_pipe, "predict_proba")
-                else None
-            )
-            result["xgboost"] = _rich_metrics(
-                np.array(y_test), y_pred_xgb, y_proba_xgb, n_classes
-            )
-            result["xgboost"]["fit_time_s"] = round(time.time() - t0, 2)
-        except Exception as e:
-            logger.warning("[%s] xgboost failed: %s", dataset, e)
-            result["xgboost"] = {"error": str(e)}
-
-    # tabpfn
-    tabpfn = _tabpfn_classifier()
-    if tabpfn is not None:
-        t0 = time.time()
-        try:
-            from sklearn.pipeline import Pipeline
-            from sklearn.preprocessing import OrdinalEncoder
-            from sklearn.compose import ColumnTransformer
-            from sklearn.impute import SimpleImputer
-
-            cat_cols = X_train.select_dtypes(
-                include=["object", "category"]
-            ).columns.tolist()
-            num_cols = [c for c in X_train.columns if c not in cat_cols]
-            transformers = []
-            if cat_cols:
-                transformers.append(
-                    (
-                        "cat",
-                        Pipeline(
-                            [
-                                ("imp", SimpleImputer(strategy="most_frequent")),
-                                (
-                                    "enc",
-                                    OrdinalEncoder(
-                                        handle_unknown="use_encoded_value",
-                                        unknown_value=-1,
-                                    ),
-                                ),
-                            ]
-                        ),
-                        cat_cols,
-                    )
-                )
-            if num_cols:
-                transformers.append(("num", SimpleImputer(strategy="mean"), num_cols))
-            preproc = ColumnTransformer(transformers, remainder="passthrough")
-            tabpfn_pipe = Pipeline([("pre", preproc), ("clf", tabpfn)])
-            tabpfn_pipe.fit(X_train, y_train)
-            y_pred_tabpfn = tabpfn_pipe.predict(X_test)
-            y_proba_tabpfn = (
-                tabpfn_pipe.predict_proba(X_test)
-                if hasattr(tabpfn_pipe, "predict_proba")
-                else None
-            )
-            result["tabpfn"] = _rich_metrics(
-                np.array(y_test), y_pred_tabpfn, y_proba_tabpfn, n_classes
-            )
-            result["tabpfn"]["fit_time_s"] = round(time.time() - t0, 2)
-        except Exception as e:
-            logger.warning("[%s] tabpfn failed: %s", dataset, e)
-            result["tabpfn"] = {"error": str(e)}
-
-    if cache_file:
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        with open(cache_file, "w") as f:
-            json.dump(result, f, indent=2, default=str)
-
-    return result
-
-
-def run_dataset_model(
-    dataset: str,
-    spec: tuple,
-    model_id: str,
-    max_rows: int,
-    cache_dir: Path | None,
-    vertex_region: str | None = None,
-    fe_model: str | None = None,
-    web_search: bool = False,
-    base_model_id: str | None = None,
-    skip_cache_read: bool = False,
-) -> dict:
-    """Run one (dataset, model) cell. Returns a metrics dict."""
-    # For web-search variants the model_id is a synthetic key (e.g. "gpt-5.5+web");
-    # the actual LLM call uses base_model_id when provided, else strips the +web suffix.
-    actual_model_id = base_model_id or (
-        model_id.removesuffix("+web") if web_search else model_id
+        from xgboost import XGBClassifier
+    except ImportError:
+        return None
+    return XGBClassifier(
+        n_estimators=200, max_depth=4, learning_rate=0.1, n_jobs=4, verbosity=0
     )
 
-    # Per-model region override for Vertex AI (some models only exist in specific regions).
-    _region_override = None
-    if vertex_region:
-        current = os.environ.get("VERTEXAI_LOCATION", "")
-        if current != vertex_region:
-            os.environ["VERTEXAI_LOCATION"] = vertex_region
-            _region_override = current  # remember to restore after
 
-    cache_file = (
-        cache_dir
-        / f"{dataset}-{model_id.replace('/', '-')}-{_cache_key(dataset, model_id, max_rows, fe_model=fe_model, web_search=web_search)}.json"
-        if cache_dir
-        else None
-    )
-    if cache_file and cache_file.exists() and not skip_cache_read:
-        logger.info("[%s × %s] cached", dataset, model_id)
-        with open(cache_file) as f:
-            return json.load(f)
-
-    openml_name, version = spec
-    logger.info("[%s × %s] loading dataset…", dataset, model_id)
-    X, y, class_map, description = load_dataset(openml_name, version, max_rows)
-    n_classes = len(class_map)
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.25, random_state=42, stratify=y
-    )
-    logger.info(
-        "[%s] %d rows, %d cols, %d classes", dataset, len(X), X.shape[1], n_classes
-    )
-
-    result = {
-        "dataset": dataset,
-        "model_id": model_id,
-        "n_rows": len(X),
-        "n_cols": X.shape[1],
-        "n_classes": n_classes,
-        "class_map": class_map,
-    }
-
-    # When fe_model is set, use that LLM to engineer features before all learners run.
-    if fe_model:
-        try:
-            fe_step = PromptFeatureEngineer(model=fe_model, verbose=False)
-            X_train = fe_step.fit_transform(X_train, y_train)
-            X_test = fe_step.transform(X_test)
-            logger.info(
-                "[%s] FE (%s) produced %d cols", dataset, fe_model, X_train.shape[1]
-            )
-        except Exception as e:
-            logger.warning(
-                "[%s] FE (%s) failed, using original features: %s", dataset, fe_model, e
-            )
-
-    # --- promptlearn ---
-    t0 = time.time()
+def _tabpfn_classifier():
     try:
-        clf = PromptClassifier(
-            model=actual_model_id, verbose=False, web_search=web_search
-        )
-        clf.fit(X_train, y_train, dataset_description=description or None)
-        y_pred = clf.predict(X_test)
-        y_proba = None
-        if hasattr(clf, "predict_proba"):
-            try:
-                y_proba = clf.predict_proba(X_test)
-            except Exception:
-                pass
-        result["promptlearn"] = _rich_metrics(
-            np.array(y_test), y_pred, y_proba, n_classes
-        )
-        result["promptlearn"]["fit_time_s"] = round(time.time() - t0, 2)
-        result["promptlearn"]["generated_code"] = clf.raw_python_code_
-        result["promptlearn"]["fit_prompt"] = getattr(clf, "fit_prompt_", None)
-        logger.info(
-            "[%s × %s] promptlearn accuracy=%.3f",
-            dataset,
-            model_id,
-            result["promptlearn"]["accuracy"],
-        )
-    except Exception as e:
-        logger.warning("[%s × %s] promptlearn failed: %s", dataset, model_id, e)
-        result["promptlearn"] = {"error": str(e)}
-
-    if cache_file:
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        with open(cache_file, "w") as f:
-            json.dump(result, f, indent=2, default=str)
-
-    if _region_override is not None:
-        os.environ["VERTEXAI_LOCATION"] = _region_override
-
-    return result
-
-
-def load_all_results(output_dir: Path) -> list[dict]:
-    results = []
-    for f in sorted(output_dir.glob("*.json")):
-        if f.name == "metrics_all.json":
-            continue
-        with open(f) as fh:
-            results.append(json.load(fh))
-    return results
+        from tabpfn import TabPFNClassifier
+    except ImportError:
+        return None
+    return TabPFNClassifier(ignore_pretraining_limits=True)
 
 
 def build_summary_df(results: list[dict]) -> pd.DataFrame:
@@ -595,64 +223,71 @@ def build_summary_df(results: list[dict]) -> pd.DataFrame:
     promptlearn learner names are qualified as "promptlearn[<llm-label>]" so they
     are never confused with the LLM model dimension.  Baseline learners
     (logreg, xgboost, tabpfn) appear once per dataset with no LLM association.
+
+    Accepts both promptlearn cache dicts (which have "dataset" and "model_id" keys)
+    and baseline-only cache dicts (which have "logreg"/"xgboost"/"tabpfn" keys but
+    no "dataset"/"model_id").  Callers must inject a "dataset" key into baseline-only
+    dicts before passing them here (collate.py does this).
     """
     rows = []
     model_meta = {m["model_id"]: m for m in MODEL_PROGRESSION}
     seen_baselines: set[tuple] = set()  # (dataset, learner) — emit baselines once
 
     for r in results:
-        if "dataset" not in r or "model_id" not in r:
-            continue  # skip baseline-only cache files
-        dataset = r["dataset"]
-        model_id = r["model_id"]
-        meta = model_meta.get(model_id, {})
-        llm_label = meta.get("label", model_id)
+        dataset = r.get("dataset")
+        model_id = r.get("model_id")
 
-        # promptlearn — qualified name, carries LLM metadata
-        if "promptlearn" in r and "error" not in r["promptlearn"]:
-            m = r["promptlearn"]
-            web_search = meta.get("web_search", False)
-            row = {
-                "dataset": dataset,
-                "model_id": model_id,
-                "llm_label": llm_label,
-                "release_date": str(meta.get("release_date", "")),
-                "family": meta.get("family", ""),
-                "provider": meta.get("provider", "openai"),
-                "web_search": web_search,
-                "learner": f"promptlearn[{llm_label}]",
-                "n_rows": r.get("n_rows"),
-                "n_cols": r.get("n_cols"),
-                "n_classes": r.get("n_classes"),
-            }
-            row.update({k: v for k, v in m.items() if k not in ("fit_time_s",)})
-            row["fit_time_s"] = m.get("fit_time_s")
-            rows.append(row)
+        # promptlearn rows carry both dataset and model_id
+        if dataset and model_id:
+            meta = model_meta.get(model_id, {})
+            llm_label = meta.get("label", model_id)
 
-        # baselines — emit once per (dataset, learner)
-        for learner in ("logreg", "xgboost", "tabpfn"):
-            key = (dataset, learner)
-            if key in seen_baselines:
-                continue
-            if learner not in r or "error" in r[learner]:
-                continue
-            seen_baselines.add(key)
-            m = r[learner]
-            row = {
-                "dataset": dataset,
-                "model_id": None,
-                "llm_label": None,
-                "release_date": None,
-                "family": None,
-                "provider": None,
-                "learner": learner,
-                "n_rows": r.get("n_rows"),
-                "n_cols": r.get("n_cols"),
-                "n_classes": r.get("n_classes"),
-            }
-            row.update({k: v for k, v in m.items() if k not in ("fit_time_s",)})
-            row["fit_time_s"] = m.get("fit_time_s")
-            rows.append(row)
+            if "promptlearn" in r and "error" not in r["promptlearn"]:
+                m = r["promptlearn"]
+                web_search = meta.get("web_search", False)
+                row = {
+                    "dataset": dataset,
+                    "model_id": model_id,
+                    "llm_label": llm_label,
+                    "release_date": str(meta.get("release_date", "")),
+                    "family": meta.get("family", ""),
+                    "provider": meta.get("provider", "openai"),
+                    "web_search": web_search,
+                    "learner": f"promptlearn[{llm_label}]",
+                    "n_rows": r.get("n_rows"),
+                    "n_cols": r.get("n_cols"),
+                    "n_classes": r.get("n_classes"),
+                }
+                row.update({k: v for k, v in m.items() if k not in ("fit_time_s",)})
+                row["fit_time_s"] = m.get("fit_time_s")
+                rows.append(row)
+
+        # Emit baselines from any dict that has a dataset key (including promptlearn
+        # cache files that embed baselines from the old run_model_progression flow).
+        if dataset:
+            for learner in ("logreg", "xgboost", "tabpfn"):
+                key = (dataset, learner)
+                if key in seen_baselines:
+                    continue
+                if learner not in r or "error" in r[learner]:
+                    continue
+                seen_baselines.add(key)
+                m = r[learner]
+                row = {
+                    "dataset": dataset,
+                    "model_id": None,
+                    "llm_label": None,
+                    "release_date": None,
+                    "family": None,
+                    "provider": None,
+                    "learner": learner,
+                    "n_rows": r.get("n_rows"),
+                    "n_cols": r.get("n_cols"),
+                    "n_classes": r.get("n_classes"),
+                }
+                row.update({k: v for k, v in m.items() if k not in ("fit_time_s",)})
+                row["fit_time_s"] = m.get("fit_time_s")
+                rows.append(row)
 
     return pd.DataFrame(rows)
 
@@ -864,7 +499,14 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
         "Classical ML baselines shown as dashed horizontals",
         fontsize=13,
     )
-    ax.legend(fontsize=10, loc="lower right")
+    # Sort legend entries by the numeric value embedded in the label (highest first).
+    handles, labels = ax.get_legend_handles_labels()
+    import re as _re
+    def _legend_sort_key(hl):
+        m = _re.search(r"\((\d+\.\d+)\)", hl[1])
+        return -float(m.group(1)) if m else 0.0
+    handles, labels = zip(*sorted(zip(handles, labels), key=_legend_sort_key)) if handles else (handles, labels)
+    ax.legend(handles, labels, fontsize=10, loc="lower right")
     fig.tight_layout()
     out = output_dir / "model_progression.png"
     fig.savefig(out, dpi=150)
@@ -919,9 +561,10 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
         plt.close(fig2)
 
     # ── 3. All-learner bar chart: promptlearn bars per LLM + baseline lines ──
+    _provider_bar_color = {"openai": "#D65F5F", "google": "#4285F4"}
     if not pl_data.empty:
         pl_bar = (
-            pl_data.groupby(["llm_label", "release_date"])["accuracy"]
+            pl_data.groupby(["llm_label", "release_date", "provider"])["accuracy"]
             .mean()
             .reset_index()
             .sort_values("release_date")
@@ -929,11 +572,20 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
         llm_labels = pl_bar["llm_label"].tolist()
         n_models = len(llm_labels)
         x = np.arange(n_models)
+        bar_colors = [_provider_bar_color.get(p, "#999999") for p in pl_bar["provider"]]
 
         fig3, ax3 = plt.subplots(figsize=(max(9, n_models * 1.4), 6))
-        bars = ax3.bar(
-            x, pl_bar["accuracy"], color="#D65F5F", label="promptlearn", zorder=3
-        )
+        # Draw bars provider-by-provider so each gets its own legend entry.
+        _bar_legend_seen: set[str] = set()
+        for i, (_, row) in enumerate(pl_bar.iterrows()):
+            prov = row["provider"]
+            color = _provider_bar_color.get(prov, "#999999")
+            label_str = f"promptlearn / {'OpenAI' if prov == 'openai' else 'Google Gemini'}"
+            ax3.bar(i, row["accuracy"], color=color,
+                    label=label_str if label_str not in _bar_legend_seen else "_nolegend_",
+                    zorder=3)
+            _bar_legend_seen.add(label_str)
+        bars = ax3.patches  # for annotation loop below
         for bar, val in zip(bars, pl_bar["accuracy"]):
             ax3.text(
                 bar.get_x() + bar.get_width() / 2,
@@ -971,7 +623,13 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
         ax3.set_title(
             "promptlearn vs baselines: mean accuracy by LLM generation", fontsize=13
         )
-        ax3.legend(fontsize=10)
+        handles3, labels3 = ax3.get_legend_handles_labels()
+        def _leg3_key(hl):
+            m = _re.search(r"\((\d+\.\d+)\)", hl[1])
+            return -float(m.group(1)) if m else 0.0
+        if handles3:
+            handles3, labels3 = zip(*sorted(zip(handles3, labels3), key=_leg3_key))
+        ax3.legend(handles3, labels3, fontsize=10)
         ax3.grid(axis="y", alpha=0.4)
         fig3.tight_layout()
         out3 = output_dir / "all_learners_bar.png"
@@ -991,7 +649,7 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
         )
         if best_baseline_acc is not None:
             pl_bar2 = (
-                pl_data.groupby(["llm_label", "release_date"])["accuracy"]
+                pl_data.groupby(["llm_label", "release_date", "provider"])["accuracy"]
                 .mean()
                 .reset_index()
                 .sort_values("release_date")
@@ -999,8 +657,12 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
             pl_bar2["gap"] = pl_bar2["accuracy"] - best_baseline_acc
 
             fig4, ax4 = plt.subplots(figsize=(12, 5))
-            colors = ["#D65F5F" if g >= 0 else "#4878CF" for g in pl_bar2["gap"]]
-            ax4.bar(pl_bar2["llm_label"], pl_bar2["gap"], color=colors, zorder=3)
+            # Solid provider color when above baseline, desaturated when below.
+            _gap_colors = []
+            for _, row in pl_bar2.iterrows():
+                base = _provider_bar_color.get(row["provider"], "#999999")
+                _gap_colors.append(base if row["gap"] >= 0 else base + "80")
+            ax4.bar(pl_bar2["llm_label"], pl_bar2["gap"], color=_gap_colors, zorder=3)
             ax4.axhline(0, color="black", linewidth=1.0)
             for _, row in pl_bar2.iterrows():
                 ax4.text(
@@ -1015,7 +677,7 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
             ax4.set_ylabel("Accuracy gap vs best baseline", fontsize=12)
             ax4.set_title(
                 "promptlearn gap to best baseline (logreg / XGBoost / TabPFN)\n"
-                "Red = above baseline  ·  Blue = below baseline",
+                "Solid = above baseline  ·  Faded = below baseline",
                 fontsize=12,
             )
             ax4.yaxis.set_major_formatter(
@@ -1143,182 +805,41 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
 
 
 def print_summary_table(df: pd.DataFrame):
-    print("\n## Model progression — mean metrics across datasets\n")
+    """Print the full model × dataset accuracy grid.
 
-    # promptlearn — one row per LLM, sorted by release date
+    LLM models are rows (ordered by release date), datasets are columns, with a
+    MEAN column on the right.  Baselines (tabpfn, logreg, xgboost) appear as
+    rows below the LLMs.
+    """
+    print("\n## Model progression — accuracy grid (model × dataset)\n")
+
+    all_datasets = sorted(df["dataset"].unique())
+
+    # ── LLM rows ─────────────────────────────────────────────────────────────
     pl_rows = df[df["learner"].str.startswith("promptlearn[")].copy()
     if not pl_rows.empty:
         pl_rows["release_date"] = pd.to_datetime(pl_rows["release_date"])
-        pl_summary = (
-            pl_rows.groupby(["llm_label", "release_date"])
-            .agg(
-                accuracy=("accuracy", "mean"),
-                balanced_accuracy=("balanced_accuracy", "mean"),
-                f1_macro=("f1_macro", "mean"),
-                n_datasets=("dataset", "count"),
-            )
-            .reset_index()
-            .sort_values("release_date")
+        # Pivot: rows = llm_label (sorted by release_date), cols = dataset
+        pivot = pl_rows.pivot_table(
+            index=["llm_label", "release_date"], columns="dataset", values="accuracy"
         )
-        print("### promptlearn")
-        print(
-            pl_summary[
-                ["llm_label", "accuracy", "balanced_accuracy", "f1_macro", "n_datasets"]
-            ].to_string(index=False, float_format="%.3f")
-        )
+        pivot = pivot.sort_values("release_date")
+        pivot.index = pivot.index.get_level_values("llm_label")
+        pivot = pivot.reindex(columns=all_datasets)
+        pivot["MEAN"] = pivot.mean(axis=1)
+        print(pivot.to_string(float_format="%.3f"))
         print()
 
-    # baselines — one row each
-    for learner in ("logreg", "xgboost", "tabpfn"):
-        rows = df[df["learner"] == learner]
-        if rows.empty:
+    # ── Baseline rows ─────────────────────────────────────────────────────────
+    print("--- baselines ---")
+    for learner in ("tabpfn", "logreg", "xgboost"):
+        brows = df[df["learner"] == learner]
+        if brows.empty:
             continue
-        acc = rows["accuracy"].mean()
-        bal = rows["balanced_accuracy"].mean()
-        f1 = rows["f1_macro"].mean()
-        n = rows["dataset"].nunique()
-        print(
-            f"### {learner}  (accuracy={acc:.3f}  balanced={bal:.3f}  f1={f1:.3f}  n_datasets={n})"
-        )
+        row_data = {ds: brows[brows["dataset"] == ds]["accuracy"].mean()
+                    for ds in all_datasets}
+        row_data["MEAN"] = brows["accuracy"].mean()
+        row_series = pd.Series(row_data, name=learner)
+        print(f"\n{learner}")
+        print(row_series.to_string(float_format="%.3f"))
         print()
-
-
-def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--models",
-        nargs="*",
-        default=[m["model_id"] for m in MODEL_PROGRESSION],
-        help="Model IDs to run (default: full progression list).",
-    )
-    parser.add_argument(
-        "--datasets",
-        nargs="*",
-        default=list(DEFAULT_DATASETS),
-        help="Dataset keys to run (default: full suite).",
-    )
-    parser.add_argument("--max-rows", type=int, default=2000)
-    parser.add_argument(
-        "--output-dir",
-        default="benchmarks/progression_results",
-        help="Directory for cached results, metrics JSON, and plots.",
-    )
-    parser.add_argument("--no-cache", action="store_true")
-    parser.add_argument(
-        "--fe-model",
-        default=None,
-        metavar="MODEL_ID",
-        help="LLM to use for PromptFeatureEngineer (e.g. gpt-5.5). Applied before all learners. Omit to disable FE.",
-    )
-    args = parser.parse_args(argv)
-
-    logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(message)s")
-    logging.getLogger("promptlearn").setLevel(logging.WARNING)
-    logger.setLevel(logging.INFO)
-
-    output_dir = Path(args.output_dir)
-    cache_dir = output_dir / "cache"
-    skip_cache_read = args.no_cache
-
-    model_lookup = {m["model_id"]: m for m in MODEL_PROGRESSION}
-    models_to_run = [m for m in args.models if m in model_lookup]
-    unknown = [m for m in args.models if m not in model_lookup]
-    if unknown:
-        logger.warning("Unknown model IDs (not in MODEL_PROGRESSION): %s", unknown)
-
-    # Compute baselines once per dataset (model-independent).
-    baselines: dict[str, dict] = {}
-    for dataset in args.datasets:
-        spec = DEFAULT_DATASETS.get(dataset)
-        if spec is None:
-            continue
-        try:
-            baselines[dataset] = run_dataset_baselines(
-                dataset, spec, args.max_rows, cache_dir, skip_cache_read=skip_cache_read
-            )
-        except Exception as e:
-            logger.warning("[%s] baselines failed: %s", dataset, e)
-            baselines[dataset] = {}
-
-    all_results = []
-    output_dir.mkdir(parents=True, exist_ok=True)
-    metrics_path = output_dir / "metrics_all.json"
-
-    def _flush_results():
-        """Write metrics JSON + CSV and regenerate chart from current results."""
-        if not all_results:
-            return
-        with open(metrics_path, "w") as f:
-            json.dump(all_results, f, indent=2, default=str)
-        df = build_summary_df(all_results)
-        csv_path = output_dir / "metrics_all.csv"
-        df.to_csv(csv_path, index=False)
-        try:
-            plot_progression(df, output_dir)
-        except Exception as e:
-            logger.warning("Chart update failed: %s", e)
-
-    for model_id in models_to_run:
-        meta = model_lookup[model_id]
-        vertex_region = meta.get("vertex_region")
-        web_search = meta.get("web_search", False)
-        base_model_id = meta.get("base_model_id")
-        label = meta.get("label", model_id)
-        datasets_done = 0
-        for dataset in args.datasets:
-            spec = DEFAULT_DATASETS.get(dataset)
-            if spec is None:
-                logger.warning("Unknown dataset %r, skipping", dataset)
-                continue
-            try:
-                r = run_dataset_model(
-                    dataset,
-                    spec,
-                    model_id,
-                    args.max_rows,
-                    cache_dir,
-                    vertex_region=vertex_region,
-                    fe_model=args.fe_model,
-                    web_search=web_search,
-                    base_model_id=base_model_id,
-                    skip_cache_read=skip_cache_read,
-                )
-                # Merge baseline results into this row for summary/plotting.
-                r.update(baselines.get(dataset, {}))
-                all_results.append(r)
-                datasets_done += 1
-                pl = r.get("promptlearn", {})
-                pl_acc = pl.get("accuracy", float("nan"))
-                pl_err = pl.get("error")
-                status = f"accuracy={pl_acc:.3f}" if not pl_err else f"FAILED: {pl_err}"
-                print(
-                    f"  promptlearn[{label}]  {dataset}  {status}",
-                    flush=True,
-                )
-                # Incremental flush: update outputs after every dataset so the
-                # user can inspect partial results and abort if numbers look bad.
-                _flush_results()
-                print(
-                    f"  [chart + metrics updated — {datasets_done}/{len(args.datasets)} datasets done for {label}]",
-                    flush=True,
-                )
-            except Exception as e:
-                logger.warning("[%s × %s] failed: %s", dataset, model_id, e)
-
-    if not all_results:
-        print("No results.")
-        return 1
-
-    # Final flush (no-op if last dataset already triggered it, but ensures
-    # the files are always in sync at exit).
-    _flush_results()
-    logger.info("Saved all metrics → %s", metrics_path)
-
-    df = build_summary_df(all_results)
-    print_summary_table(df)
-
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

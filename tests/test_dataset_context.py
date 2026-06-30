@@ -37,7 +37,7 @@ def test_classifier_description_in_prompt(monkeypatch):
     clf.fit(X, y, dataset_description="UCI Adult: predict income >50k.")
 
     first = calls[0]
-    assert "Dataset context:" in first["prompt"]
+    assert "Dataset context" in first["prompt"]
     assert "UCI Adult" in first["prompt"]
     assert first["web_search"] is False
 
@@ -56,7 +56,7 @@ def test_regressor_description_in_prompt(monkeypatch):
     y = pd.Series([0.45, 1.01])
     reg.fit(X, y, dataset_description="Falling body: predict fall time in seconds.")
 
-    assert "Dataset context:" in calls[0]["prompt"]
+    assert "Dataset context" in calls[0]["prompt"]
     assert "Falling body" in calls[0]["prompt"]
 
 

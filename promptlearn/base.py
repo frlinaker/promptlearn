@@ -15,6 +15,7 @@ from .utils import (
     prepare_training_data,
     extract_python_code,
     parse_tsv,
+    sanitize_dataset_description,
 )
 
 logger = logging.getLogger("promptlearn")
@@ -201,7 +202,10 @@ class BasePromptEstimator(BaseEstimator):
         csv_data = sample_df.to_csv(index=False)
 
         if dataset_description:
-            prompt = f"Dataset context:\n{dataset_description.strip()}\n\n" + prompt
+            csv_data = (
+                f"--- Dataset context ---\n{sanitize_dataset_description(dataset_description)}\n"
+                f"--- Data ---\n{csv_data}"
+            )
 
         if synthetic_features:
             synthetic_note = (
@@ -281,8 +285,6 @@ class BasePromptEstimator(BaseEstimator):
                 feedback = (
                     "\n\nThe Python function you previously returned failed validation "
                     f"with this error:\n{e}\n\n"
-                    "Here is the code that failed:\n"
-                    f"{code}\n\n"
                     "Fix the problem and return only the corrected, valid Python code."
                 )
                 continue
@@ -300,9 +302,17 @@ class BasePromptEstimator(BaseEstimator):
         for row in rows:
             predict_fn(**row)
 
+    _EXTEND_MAX_RETRIES = 5
+
     def _extend_code(self, code: str) -> str:
+        """Expand categorical mappings in the generated code via a second LLM pass.
+
+        Validates the result and retries up to _EXTEND_MAX_RETRIES times when the
+        LLM returns broken code, feeding the error back each time.  Falls back to
+        the original code if all attempts fail.
+        """
         logger.info("[Post-Process] Expanding code via second LLM pass...")
-        refinement_prompt = (
+        base_prompt = (
             "The following function may use a dictionary, set, or mapping based on domain knowledge (e.g., country names, animal types).\n"
             "Please re-write the function to extend any such mappings with many more possible real-world keys, if applicable.\n"
             "Try to figure out the logic of the function based on the variable names and values that are processed in the function.\n"
@@ -310,14 +320,26 @@ class BasePromptEstimator(BaseEstimator):
             "Only return valid Python code.\n\n"
             f"{code}"
         )
-        try:
-            refined_code = self._call_llm(refinement_prompt)
-            refined_code = extract_python_code(str(refined_code))
-            logger.info("[Post-Process] Successfully extended function.")
-            return refined_code
-        except Exception as e:
-            logger.warning(f"[Post-Process] Skipping refinement: {e}")
-        return code  # fallback: pass back the original code
+        feedback = ""
+        for attempt in range(self._EXTEND_MAX_RETRIES):
+            try:
+                refined_code = self._call_llm(base_prompt + feedback)
+                refined_code = extract_python_code(str(refined_code))
+                compile(refined_code, "<extend>", "exec")
+                make_predict_fn(refined_code)
+                logger.info("[Post-Process] Successfully extended function.")
+                return refined_code
+            except Exception as e:
+                logger.warning(
+                    "[Post-Process] Attempt %d/%d failed: %s",
+                    attempt + 1, self._EXTEND_MAX_RETRIES, e,
+                )
+                feedback = (
+                    f"\n\nThe code you returned has an error: {e}\n"
+                    "Fix it and return only valid Python code."
+                )
+        logger.warning("[Post-Process] All extend attempts failed; using original code.")
+        return code
 
     def sample(self, n: int = 5):
         """Generate n synthetic examples that illustrate the heuristic."""

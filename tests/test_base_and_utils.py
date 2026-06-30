@@ -1,5 +1,6 @@
 import pytest
 from promptlearn.base import BasePromptEstimator
+from promptlearn.utils import sanitize_dataset_description
 
 
 def test_get_set_params():
@@ -40,6 +41,27 @@ def test_call_llm_normalizes_ollama_model(monkeypatch):
     out = est._call_llm("hi")
     assert captured["model"] == "ollama/llama3.1"
     assert out == "hello"
+
+
+def test_sanitize_description_strips_and_cleans():
+    assert sanitize_dataset_description("  hello  ") == "hello"
+
+
+def test_sanitize_description_removes_braces():
+    result = sanitize_dataset_description("context {data} here")
+    assert "{" not in result and "}" not in result
+    assert "context" in result and "data" in result and "here" in result
+
+
+def test_sanitize_description_truncates():
+    long = "x" * 600
+    result = sanitize_dataset_description(long)
+    assert len(result) <= 512  # 500 chars + " [truncated]" (12 chars)
+    assert result.endswith("[truncated]")
+
+
+def test_sanitize_description_collapses_whitespace():
+    assert sanitize_dataset_description("a  b\t\tc") == "a b c"
 
 
 def test_extend_code_handles_llm_failure(monkeypatch):
