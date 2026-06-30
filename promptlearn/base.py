@@ -212,7 +212,8 @@ class BasePromptEstimator(BaseEstimator):
             )
             prompt = synthetic_note + prompt
 
-        base_prompt = prompt.format(data=csv_data)
+        base_prompt = prompt.replace("{data}", csv_data)
+        self.fit_prompt_ = base_prompt
         logger.info(f"[LLM Prompt]\n{base_prompt}")
 
         # Rows used to confirm the generated code actually runs (empty for zero-row fits).

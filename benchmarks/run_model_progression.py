@@ -536,6 +536,8 @@ def run_dataset_model(
             np.array(y_test), y_pred, y_proba, n_classes
         )
         result["promptlearn"]["fit_time_s"] = round(time.time() - t0, 2)
+        result["promptlearn"]["generated_code"] = clf.raw_python_code_
+        result["promptlearn"]["fit_prompt"] = getattr(clf, "fit_prompt_", None)
         logger.info(
             "[%s × %s] promptlearn accuracy=%.3f",
             dataset,
@@ -1218,12 +1220,30 @@ def main(argv=None):
             baselines[dataset] = {}
 
     all_results = []
+    output_dir.mkdir(parents=True, exist_ok=True)
+    metrics_path = output_dir / "metrics_all.json"
+
+    def _flush_results():
+        """Write metrics JSON + CSV and regenerate chart from current results."""
+        if not all_results:
+            return
+        with open(metrics_path, "w") as f:
+            json.dump(all_results, f, indent=2, default=str)
+        df = build_summary_df(all_results)
+        csv_path = output_dir / "metrics_all.csv"
+        df.to_csv(csv_path, index=False)
+        try:
+            plot_progression(df, output_dir)
+        except Exception as e:
+            logger.warning("Chart update failed: %s", e)
+
     for model_id in models_to_run:
         meta = model_lookup[model_id]
         vertex_region = meta.get("vertex_region")
         web_search = meta.get("web_search", False)
         base_model_id = meta.get("base_model_id")
         label = meta.get("label", model_id)
+        datasets_done = 0
         for dataset in args.datasets:
             spec = DEFAULT_DATASETS.get(dataset)
             if spec is None:
@@ -1244,9 +1264,20 @@ def main(argv=None):
                 # Merge baseline results into this row for summary/plotting.
                 r.update(baselines.get(dataset, {}))
                 all_results.append(r)
-                pl_acc = r.get("promptlearn", {}).get("accuracy", float("nan"))
+                datasets_done += 1
+                pl = r.get("promptlearn", {})
+                pl_acc = pl.get("accuracy", float("nan"))
+                pl_err = pl.get("error")
+                status = f"accuracy={pl_acc:.3f}" if not pl_err else f"FAILED: {pl_err}"
                 print(
-                    f"  promptlearn[{label}]  {dataset}  accuracy={pl_acc:.3f}",
+                    f"  promptlearn[{label}]  {dataset}  {status}",
+                    flush=True,
+                )
+                # Incremental flush: update outputs after every dataset so the
+                # user can inspect partial results and abort if numbers look bad.
+                _flush_results()
+                print(
+                    f"  [chart + metrics updated — {datasets_done}/{len(args.datasets)} datasets done for {label}]",
                     flush=True,
                 )
             except Exception as e:
@@ -1256,20 +1287,13 @@ def main(argv=None):
         print("No results.")
         return 1
 
-    # Save full metrics JSON.
-    output_dir.mkdir(parents=True, exist_ok=True)
-    metrics_path = output_dir / "metrics_all.json"
-    with open(metrics_path, "w") as f:
-        json.dump(all_results, f, indent=2, default=str)
+    # Final flush (no-op if last dataset already triggered it, but ensures
+    # the files are always in sync at exit).
+    _flush_results()
     logger.info("Saved all metrics → %s", metrics_path)
 
     df = build_summary_df(all_results)
-    csv_path = output_dir / "metrics_all.csv"
-    df.to_csv(csv_path, index=False)
-    logger.info("Saved CSV → %s", csv_path)
-
     print_summary_table(df)
-    plot_progression(df, output_dir)
 
     return 0
 
