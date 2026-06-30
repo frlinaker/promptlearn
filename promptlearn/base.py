@@ -201,12 +201,6 @@ class BasePromptEstimator(BaseEstimator):
 
         csv_data = sample_df.to_csv(index=False)
 
-        if dataset_description:
-            csv_data = (
-                f"--- Dataset context ---\n{sanitize_dataset_description(dataset_description)}\n"
-                f"--- Data ---\n{csv_data}"
-            )
-
         if synthetic_features:
             synthetic_note = (
                 f"\nNote: the following columns are SYNTHETIC features pre-computed by a "
@@ -217,10 +211,22 @@ class BasePromptEstimator(BaseEstimator):
             prompt = synthetic_note + prompt
 
         base_prompt = prompt.replace("{data}", csv_data)
+
+        if dataset_description:
+            base_prompt = (
+                f"--- Dataset context ---\n{sanitize_dataset_description(dataset_description)}\n"
+                f"--- End context ---\n\n"
+            ) + base_prompt
+
+        if self.web_search:
+            base_prompt = (
+                "You may search the web to look up information about these features "
+                "and their real-world relationships before writing the predict function.\n\n"
+            ) + base_prompt
+
         self.fit_prompt_ = base_prompt
         logger.info(f"[LLM Prompt]\n{base_prompt}")
 
-        # Rows used to confirm the generated code actually runs (empty for zero-row fits).
         validation_rows = (
             list(
                 generate_feature_dicts(
@@ -230,12 +236,6 @@ class BasePromptEstimator(BaseEstimator):
             if self.feature_names_
             else []
         )
-
-        if self.web_search:
-            base_prompt = (
-                "You may search the web to look up information about these features "
-                "and their real-world relationships before writing the predict function.\n\n"
-            ) + base_prompt
 
         raw_code, extended_code, predict_fn = self._generate_code(
             base_prompt, validation_rows, web_search=self.web_search

@@ -60,6 +60,42 @@ def test_regressor_description_in_prompt(monkeypatch):
     assert "Falling body" in calls[0]["prompt"]
 
 
+def test_description_precedes_instructions(monkeypatch):
+    """Dataset context block must appear before the task instructions."""
+    clf = PromptClassifier(model="gpt-5.4-mini", verbose=False)
+    calls = []
+
+    def fake_call_llm(prompt, web_search=False):
+        calls.append(prompt)
+        return SIMPLE_CODE
+
+    monkeypatch.setattr(clf, "_call_llm", fake_call_llm)
+
+    X = pd.DataFrame({"age": [25, 40], "income": [30000, 80000]})
+    y = pd.Series([0, 1])
+    clf.fit(X, y, dataset_description="UCI Adult: predict income >50k.")
+
+    # First call is the fit prompt; extend call comes after.
+    fit_prompt = calls[0]
+    assert fit_prompt.index("Dataset context") < fit_prompt.index("Output a single valid Python")
+
+
+def test_fit_prompt_includes_web_search_prefix(monkeypatch):
+    """fit_prompt_ must reflect the actual prompt sent, including the web search prefix."""
+    clf = PromptClassifier(model="gpt-5.5", verbose=False, web_search=True)
+
+    def fake_call_llm(prompt, web_search=False):
+        return SIMPLE_CODE
+
+    monkeypatch.setattr(clf, "_call_llm", fake_call_llm)
+
+    X = pd.DataFrame({"x": [1, 2]})
+    y = pd.Series([0, 1])
+    clf.fit(X, y)
+
+    assert "search the web" in clf.fit_prompt_.lower()
+
+
 def test_no_description_prompt_unchanged(monkeypatch):
     clf = PromptClassifier(model="gpt-5.4-mini", verbose=False)
     captured = {}
