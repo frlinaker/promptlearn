@@ -173,7 +173,7 @@ class PromptFeatureEngineer(TransformerMixin, BasePromptEstimator):
         extra = [c for c in (self.new_feature_names_ or []) if c not in base]
         return np.asarray(base + extra, dtype=object)
 
-    def _validate_predict_fn(self, predict_fn, rows: list) -> None:
+    def _validate_predict_fn(self, predict_fn, rows: list, labels: list = []) -> None:
         """Confirm the generated function returns a consistent dict of features."""
         if not rows:
             raise ValueError(

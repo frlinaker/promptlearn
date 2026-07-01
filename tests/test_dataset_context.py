@@ -63,7 +63,7 @@ def test_regressor_description_in_prompt(monkeypatch):
 
 
 def test_description_precedes_instructions(monkeypatch):
-    """Dataset context block must appear before the task instructions in fit_prompt_."""
+    """Dataset context block must appear after task instructions but before Data: in fit_prompt_."""
     clf = PromptClassifier(model="gpt-5.4-mini", verbose=False, context_prepass=False)
 
     def fake_call_llm(prompt, web_search=False):
@@ -76,7 +76,10 @@ def test_description_precedes_instructions(monkeypatch):
     clf.fit(X, y, dataset_description="UCI Adult: predict income >50k.")
 
     fit_prompt = clf.fit_prompt_
-    assert fit_prompt.index("Dataset context") < fit_prompt.index("Output a single valid Python")
+    instructions_pos = fit_prompt.index("Output a single valid Python")
+    context_pos = fit_prompt.index("Dataset context")
+    data_pos = fit_prompt.index("Data:")
+    assert instructions_pos < context_pos < data_pos
 
 
 def test_fit_prompt_includes_web_search_prefix(monkeypatch):

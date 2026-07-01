@@ -420,9 +420,10 @@ class BasePromptEstimator(BaseEstimator):
             if self.feature_names_
             else []
         )
+        validation_labels = list(sample_df[self.target_name_]) if self.target_name_ else []
 
         raw_code, extended_code, predict_fn = self._generate_code(
-            base_prompt, validation_rows, web_search=self.web_search
+            base_prompt, validation_rows, validation_labels, web_search=self.web_search
         )
         self.raw_python_code_ = raw_code
         self.python_code_ = extended_code
@@ -430,7 +431,7 @@ class BasePromptEstimator(BaseEstimator):
         return self
 
     def _generate_code(
-        self, base_prompt: str, validation_rows: list, web_search: bool = False
+        self, base_prompt: str, validation_rows: list, validation_labels: list = [], web_search: bool = False
     ):
         """Generate code from the LLM with a validation-and-retry loop.
 
@@ -460,7 +461,7 @@ class BasePromptEstimator(BaseEstimator):
                 raw_code = code
                 extended_code = self._extend_code(code)
                 fn = make_predict_fn(extended_code)
-                self._validate_predict_fn(fn, validation_rows)
+                self._validate_predict_fn(fn, validation_rows, validation_labels)
             except Exception as e:
                 last_error = e
                 logger.warning(
@@ -479,10 +480,27 @@ class BasePromptEstimator(BaseEstimator):
         assert last_error is not None
         raise last_error
 
-    def _validate_predict_fn(self, predict_fn: Callable, rows: list) -> None:
+    def _validate_predict_fn(self, predict_fn: Callable, rows: list, labels: list = []) -> None:
         """Run the compiled function over the training sample to confirm it
         executes without raising. Any exception is treated as a validation
         failure so ``_fit`` can retry with the error fed back to the LLM."""
+        import inspect
+        sig = inspect.signature(predict_fn)
+        params = sig.parameters
+        has_var_keyword = any(
+            p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values()
+        )
+        if not has_var_keyword:
+            if rows:
+                expected = set(rows[0].keys())
+                accepted = set(params.keys())
+                missing = expected - accepted
+                if missing:
+                    raise ValueError(
+                        f"Generated predict() does not accept **kwargs and is missing "
+                        f"expected feature arguments: {sorted(missing)}. "
+                        f"Rewrite predict() to use **features or include all feature arguments."
+                    )
         for row in rows:
             predict_fn(**row)
 
