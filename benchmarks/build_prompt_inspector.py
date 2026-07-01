@@ -214,8 +214,6 @@ CSS = textwrap.dedent("""\
     .model-detail { display: none; padding: 0 20px 20px; background: #fafcff; border-top: 1px solid #eef2ff; }
     .model-detail.open { display: block; }
     .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 16px; }
-    .detail-grid.four-col { grid-template-columns: 1fr 1fr 1fr 1fr; }
-    @media (max-width: 1300px) { .detail-grid.four-col { grid-template-columns: 1fr 1fr; } }
     @media (max-width: 860px) { .detail-grid { grid-template-columns: 1fr; } }
 
     .pane-title { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: #888; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
@@ -340,7 +338,7 @@ JS = textwrap.dedent("""\
               <span class="toggle-icon">▶</span>
             </div>
             <div class="model-detail" id="${detailId}">
-              <div class="detail-grid ${m.context_prepass_prompt ? 'four-col' : ''}">
+              <div class="detail-grid">
                 ${m.context_prepass_prompt ? `
                 <div>
                   <div class="pane-title">Context pre-pass prompt
