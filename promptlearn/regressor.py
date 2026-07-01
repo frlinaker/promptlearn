@@ -6,11 +6,13 @@ from sklearn.base import RegressorMixin
 from sklearn.metrics import r2_score
 
 from .base import BasePromptEstimator, resolve_model
+from .prompt_markers import DATA_MARKER
 from .utils import generate_feature_dicts, safe_regress
 
 logger = logging.getLogger("promptlearn")
 
-DEFAULT_REGRESSION_PROMPT_TEMPLATE = """
+DEFAULT_REGRESSION_PROMPT_TEMPLATE = (
+"""
 Output a single valid Python function called 'predict' that, given the feature variables (see below), predicts a continuous value (float or int).
 
 Do NOT use any variable not defined below or present in the provided data. If you need external lookups, include them as Python lists or dicts at the top of your output.
@@ -29,9 +31,9 @@ Every string literal MUST be valid, properly terminated Python. If a dictionary 
 
 Only output valid Python code, no markdown or explanations.
 
-Data:
-{data}
 """
++ DATA_MARKER + "\n{data}\n"
+)
 
 
 class PromptRegressor(RegressorMixin, BasePromptEstimator):

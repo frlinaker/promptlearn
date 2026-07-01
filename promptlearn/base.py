@@ -9,6 +9,7 @@ from sklearn.base import BaseEstimator
 from sklearn.exceptions import NotFittedError
 
 from .explain import Explanation
+from .prompt_markers import CONTEXT_END, CONTEXT_START
 from .utils import (
     generate_feature_dicts,
     make_predict_fn,
@@ -287,8 +288,8 @@ class BasePromptEstimator(BaseEstimator):
 
         if context_block:
             prompt = (
-                f"--- Dataset context ---\n{context_block}\n"
-                f"--- End context ---\n\n"
+                f"{CONTEXT_START}\n{context_block}\n"
+                f"{CONTEXT_END}\n\n"
             ) + prompt
 
         if self.web_search:

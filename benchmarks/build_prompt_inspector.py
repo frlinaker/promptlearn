@@ -13,8 +13,12 @@ lines, and collapsible prompt + generated-code panels with syntax highlighting.
 
 import argparse
 import json
+import sys
 import textwrap
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from promptlearn.prompt_markers import CONTEXT_END, CONTEXT_START, DATA_MARKER
 
 # ---------------------------------------------------------------------------
 # Model display config — extend here when new models are added to the bench
@@ -259,13 +263,13 @@ JS = textwrap.dedent("""\
           continue;
         }
         firstLine = false;
-        if (line === "--- Dataset context ---")
+        if (line === "__CONTEXT_START__")
           out += `<span class="prompt-section-label">── Dataset context ──</span>\\n`;
-        else if (line === "--- End context ---")
+        else if (line === "__CONTEXT_END__")
           out += `<span class="prompt-section-label">── End context ──</span>\\n`;
         else if (line.trim().startsWith("Output a single valid Python"))
           out += `\\n<span class="prompt-section-label">── Task instructions ──</span>\\n${esc(line)}\\n`;
-        else if (line.trim() === "Data:")
+        else if (line.trim() === "__DATA_MARKER__")
           out += `\\n<span class="prompt-section-label">── CSV sample ──</span>\\n`;
         else
           out += esc(line) + "\\n";
@@ -446,7 +450,7 @@ JS = textwrap.dedent("""\
     });
 
     renderGroups();
-""")
+""").replace("__CONTEXT_START__", CONTEXT_START).replace("__CONTEXT_END__", CONTEXT_END).replace("__DATA_MARKER__", DATA_MARKER)
 
 
 def build_html(groups: list[dict]) -> str:

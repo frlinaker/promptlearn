@@ -5,6 +5,7 @@ import pandas as pd
 from sklearn.base import ClassifierMixin
 
 from .base import BasePromptEstimator, resolve_model
+from .prompt_markers import DATA_MARKER
 from .utils import (
     generate_feature_dicts,
     safe_predict,
@@ -13,7 +14,8 @@ from .utils import (
 logger = logging.getLogger("promptlearn")
 
 # Updated LLM prompt template with strong type casting and fallback instructions
-DEFAULT_CLASSIFICATION_PROMPT_TEMPLATE = """
+DEFAULT_CLASSIFICATION_PROMPT_TEMPLATE = (
+"""
 Output a single valid Python function called 'predict' that, given the feature variables (see below), predicts the class as an integer (e.g., 0, 1).
 
 Do NOT use any variable not defined below or present in the provided data. If you need external lookups, include them as Python lists or dicts at the top of your output.
@@ -32,9 +34,9 @@ Every string literal MUST be valid, properly terminated Python. If a dictionary 
 
 Only output valid Python code, no markdown or explanations.
 
-Data:
-{data}
 """
++ DATA_MARKER + "\n{data}\n"
+)
 
 
 class PromptClassifier(ClassifierMixin, BasePromptEstimator):
