@@ -27,7 +27,7 @@ from sklearn.preprocessing import LabelBinarizer
 
 logger = logging.getLogger("promptlearn.progression")
 
-CACHE_SCHEMA = "progression-v1"
+CACHE_SCHEMA = "progression-v2"
 
 # Ordered oldest → newest. release_date is approximate; used as the x-axis value.
 MODEL_PROGRESSION = [
