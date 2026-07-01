@@ -241,8 +241,8 @@ class BasePromptEstimator(BaseEstimator):
             "map them to their real meaning.\n"
             "3. Strips all boilerplate: citations, donor info, file format descriptions, "
             "download notices, and instance/attribute counts.\n"
-            "4. Is compact: aim for under 400 words. Use a table or bullet list for columns if "
-            "there are more than 5.\n\n"
+            "4. Is compact: aim for under 400 words. For columns, use plain lines in the format "
+            "'- column_name: description' — no markdown bold, headers, or tables.\n\n"
             "--- Raw dataset description ---\n"
             f"{dataset_description.strip()}\n"
             "--- End raw description ---\n\n"
@@ -250,7 +250,8 @@ class BasePromptEstimator(BaseEstimator):
             f"Target values seen: {', '.join(target_uniq)}\n\n"
             "Feature columns and their observed values:\n"
             f"{value_summary}\n\n"
-            "Output only the clean context block. No code, no markdown fences, no preamble."
+            "Output only the plain-text context block. No markdown of any kind (no **, no #, "
+            "no tables, no fences). This text will be embedded verbatim in a downstream prompt."
         )
 
         self.context_prepass_prompt_ = prompt
