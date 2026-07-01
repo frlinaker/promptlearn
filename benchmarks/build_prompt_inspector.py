@@ -21,31 +21,27 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 MODEL_META = {
-    "gpt-4o-mini": {"label": "GPT-4o mini", "color": "#74aa9c"},
-    "gpt-4o": {"label": "GPT-4o", "color": "#10a37f"},
-    "gpt-4.1": {"label": "GPT-4.1", "color": "#0d8a6f"},
-    "gpt-5.4-mini": {"label": "GPT-5.4 mini", "color": "#a78bfa"},
-    "gpt-5.5": {"label": "GPT-5.5", "color": "#7c3aed"},
-    "gpt-5.5+web": {"label": "GPT-5.5 +web", "color": "#5b21b6"},
-    "vertex_ai/gemini-2.0-flash-lite": {
-        "label": "Gemini 2.0 Flash Lite",
-        "color": "#81c995",
-    },
-    "vertex_ai/gemini-2.5-flash-lite": {
-        "label": "Gemini 2.5 Flash Lite",
-        "color": "#5bb974",
-    },
-    "vertex_ai/gemini-2.5-flash": {"label": "Gemini 2.5 Flash", "color": "#34a853"},
-    "vertex_ai/gemini-2.5-pro": {"label": "Gemini 2.5 Pro", "color": "#1e7e34"},
-    "vertex_ai/gemini-3.1-flash-lite": {
-        "label": "Gemini 3.1 Flash Lite",
-        "color": "#6aa3f5",
-    },
-    "vertex_ai/gemini-3.5-flash": {"label": "Gemini 3.5 Flash", "color": "#4285f4"},
-    "vertex_ai/gemini-3.5-flash+web": {
-        "label": "Gemini 3.5 Flash +web",
-        "color": "#1a56c4",
-    },
+    # OpenAI — base
+    "gpt-4o":           {"label": "GPT-4o",            "color": "#d97575"},
+    "gpt-4o-mini":      {"label": "GPT-4o mini",       "color": "#c55f5f"},
+    "gpt-4.1":          {"label": "GPT-4.1",           "color": "#b54848"},
+    "gpt-5.4-mini":     {"label": "GPT-5.4 mini",      "color": "#a03030"},
+    "gpt-5.5":          {"label": "GPT-5.5",           "color": "#8b1a1a"},
+    # OpenAI — +web
+    "gpt-4o-mini+web":  {"label": "GPT-4o mini +web",  "color": "#e8a0a0"},
+    "gpt-4.1+web":      {"label": "GPT-4.1 +web",      "color": "#d98888"},
+    "gpt-5.4-mini+web": {"label": "GPT-5.4 mini +web", "color": "#c87070"},
+    "gpt-5.5+web":      {"label": "GPT-5.5 +web",      "color": "#b85858"},
+    # Google — base
+    "vertex_ai/gemini-2.5-flash":      {"label": "Gemini 2.5 Flash",      "color": "#4285f4"},
+    "vertex_ai/gemini-2.5-pro":        {"label": "Gemini 2.5 Pro",        "color": "#2c6fd4"},
+    "vertex_ai/gemini-2.5-flash-lite": {"label": "Gemini 2.5 Flash Lite", "color": "#5b9cf5"},
+    "vertex_ai/gemini-3.5-flash":      {"label": "Gemini 3.5 Flash",      "color": "#1a56c4"},
+    # Google — +web
+    "vertex_ai/gemini-2.5-flash+web":      {"label": "Gemini 2.5 Flash +web",      "color": "#80b0fa"},
+    "vertex_ai/gemini-2.5-pro+web":        {"label": "Gemini 2.5 Pro +web",        "color": "#6a9de8"},
+    "vertex_ai/gemini-2.5-flash-lite+web": {"label": "Gemini 2.5 Flash Lite +web", "color": "#90bffc"},
+    "vertex_ai/gemini-3.5-flash+web":      {"label": "Gemini 3.5 Flash +web",      "color": "#5080d8"},
 }
 
 BASELINE_META = {
