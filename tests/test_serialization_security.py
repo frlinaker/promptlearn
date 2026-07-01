@@ -35,6 +35,7 @@ ALLOWED_STATE_FIELDS = {
     "python_code_",
     "explanation_",
     "context_summary_",
+    "context_prepass_prompt_",
     "new_feature_names_",  # PromptFeatureEngineer
 }
 

@@ -226,6 +226,8 @@ def run_dataset_model(
         result["promptlearn"]["fit_time_s"] = round(elapsed, 2)
         result["promptlearn"]["generated_code"] = clf.raw_python_code_
         result["promptlearn"]["fit_prompt"] = getattr(clf, "fit_prompt_", None)
+        result["promptlearn"]["context_prepass_prompt"] = getattr(clf, "context_prepass_prompt_", None)
+        result["promptlearn"]["context_summary"] = getattr(clf, "context_summary_", None)
         acc = result["promptlearn"]["accuracy"]
         _print(f"{tag} accuracy={acc:.3f}  ✓")
     except Exception as e:

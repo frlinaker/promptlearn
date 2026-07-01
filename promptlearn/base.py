@@ -64,6 +64,7 @@ class BasePromptEstimator(BaseEstimator):
         self.python_code_: Optional[str] = None
         self.explanation_: Optional[Explanation] = None
         self.context_summary_: Optional[str] = None
+        self.context_prepass_prompt_: Optional[str] = None
 
     # used by GridSearchCV
     def get_params(self, deep=True):
@@ -244,6 +245,7 @@ class BasePromptEstimator(BaseEstimator):
             "Output only the clean context block. No code, no markdown fences, no preamble."
         )
 
+        self.context_prepass_prompt_ = prompt
         logger.info("[Context pre-pass] Calling LLM to summarize dataset context...")
         try:
             result = self._call_llm(prompt, web_search=self.web_search)
@@ -365,6 +367,7 @@ class BasePromptEstimator(BaseEstimator):
         data, self.feature_names_, self.target_name_ = prepare_training_data(X, y)
         self.explanation_ = None  # invalidate any cached explanation from a prior fit
         self.context_summary_ = None
+        self.context_prepass_prompt_ = None
 
         if self.max_train_rows is not None and len(data) > self.max_train_rows:
             logger.info(
