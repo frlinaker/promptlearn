@@ -101,6 +101,8 @@ def load_cache(cache_dir: Path) -> tuple[dict, dict]:
                 "fit_prompt": pl.get("fit_prompt") or "",
                 "generated_code": pl.get("generated_code") or "",
                 "fit_time_s": pl.get("fit_time_s") or 0,
+                "prepass_time_s": pl.get("prepass_time_s") or 0,
+                "predict_time_s": pl.get("predict_time_s") or 0,
                 "context_prepass_prompt": pl.get("context_prepass_prompt") or "",
                 "context_summary": pl.get("context_summary") or "",
             }
@@ -127,6 +129,8 @@ def build_groups(baselines: dict, results: dict) -> list[dict]:
                     "fit_prompt": r["fit_prompt"],
                     "generated_code": r["generated_code"],
                     "fit_time_s": round(r["fit_time_s"], 2),
+                    "prepass_time_s": round(r["prepass_time_s"], 2),
+                    "predict_time_s": round(r["predict_time_s"], 4),
                     "context_prepass_prompt": r["context_prepass_prompt"],
                     "context_summary": r["context_summary"],
                 }
@@ -212,6 +216,12 @@ CSS = textwrap.dedent("""\
     }
     .acc-text { font-size: 0.85rem; font-weight: 700; text-align: right; }
     .fit-time { font-size: 0.75rem; color: #aaa; text-align: right; white-space: nowrap; }
+    .timing-bar { display: flex; gap: 6px; align-items: center; margin: 12px 0 4px; flex-wrap: wrap; }
+    .timing-segment { display: flex; align-items: center; gap: 5px; font-size: 0.75rem; }
+    .timing-swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+    .timing-label { color: #888; }
+    .timing-value { font-weight: 700; color: #444; font-family: "SF Mono","Fira Code",monospace; }
+    .timing-divider { color: #ddd; }
     .toggle-icon { font-size: 0.75rem; color: #aaa; text-align: center; transition: transform .2s; }
     .toggle-icon.open { transform: rotate(90deg); }
 
@@ -345,6 +355,14 @@ JS = textwrap.dedent("""\
               <span class="toggle-icon">▶</span>
             </div>
             <div class="model-detail" id="${detailId}">
+              ${(() => {
+                const parts = [];
+                if (m.prepass_time_s) parts.push(`<span class="timing-segment"><span class="timing-swatch" style="background:#7b61ff"></span><span class="timing-label">pre-pass</span> <span class="timing-value">${m.prepass_time_s}s</span></span><span class="timing-divider">·</span>`);
+                const fit_excl = m.prepass_time_s ? Math.max(0, m.fit_time_s - m.prepass_time_s).toFixed(2) : m.fit_time_s;
+                parts.push(`<span class="timing-segment"><span class="timing-swatch" style="background:#1976d2"></span><span class="timing-label">fit</span> <span class="timing-value">${fit_excl}s</span></span>`);
+                if (m.predict_time_s) parts.push(`<span class="timing-divider">·</span><span class="timing-segment"><span class="timing-swatch" style="background:#2e7d32"></span><span class="timing-label">predict</span> <span class="timing-value">${(m.predict_time_s * 1000).toFixed(1)}ms</span></span>`);
+                return parts.length ? `<div class="timing-bar">${parts.join('')}</div>` : '';
+              })()}
               <div class="detail-grid">
                 ${m.context_prepass_prompt ? `
                 <div>

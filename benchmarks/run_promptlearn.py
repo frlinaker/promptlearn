@@ -180,14 +180,17 @@ def run_dataset_model(
             vertex_location=vertex_region or None,
         )
 
-        # Patch _call_llm to print each LLM sub-step as it starts/finishes.
+        # Patch _call_llm to print each LLM sub-step and accumulate per-stage timing.
         _call_count = [0]
+        _prepass_time = [0.0]
+        _fit_llm_time = [0.0]  # code-gen + extend + retries
         _orig_call_llm = clf._call_llm  # bound method
 
         def _instrumented_call_llm(prompt: str, web_search: bool = False) -> str:
             _call_count[0] += 1
             n = _call_count[0]
-            if "preparing a structured dataset summary" in prompt:
+            is_prepass = "preparing a structured dataset summary" in prompt
+            if is_prepass:
                 step = "context pre-pass"
             elif "extend any such mappings" in prompt:
                 step = "extend pass"
@@ -197,18 +200,27 @@ def run_dataset_model(
                 step = f"retry #{n - 1}"
             ws_note = " [+web]" if web_search else ""
             _print(f"{tag}   → {step}{ws_note}…")
+            t_llm = time.time()
             result_text = _orig_call_llm(prompt, web_search=web_search)
-            _print(f"{tag}   ✓ {step} done  ({len(result_text):,} chars)")
+            dt = time.time() - t_llm
+            if is_prepass:
+                _prepass_time[0] += dt
+            else:
+                _fit_llm_time[0] += dt
+            _print(f"{tag}   ✓ {step} done  ({len(result_text):,} chars  {dt:.1f}s)")
             return result_text
 
         clf._call_llm = _instrumented_call_llm
 
         _print(f"{tag} fitting…")
+        t_fit = time.time()
         clf.fit(X_train, y_train, dataset_description=description or None)
-        elapsed = time.time() - t0
-        _print(f"{tag} fit done  ({elapsed:.1f}s)  code={len(clf.raw_python_code_ or ''):,} chars")
+        fit_elapsed = time.time() - t_fit
+        _print(f"{tag} fit done  ({fit_elapsed:.1f}s)  code={len(clf.raw_python_code_ or ''):,} chars")
 
+        t_predict = time.time()
         y_pred = clf.predict(X_test)
+        predict_elapsed = time.time() - t_predict
         y_proba = None
         if hasattr(clf, "predict_proba"):
             try:
@@ -218,13 +230,15 @@ def run_dataset_model(
         result["promptlearn"] = _rich_metrics(
             np.array(y_test), y_pred, y_proba, n_classes
         )
-        result["promptlearn"]["fit_time_s"] = round(elapsed, 2)
+        result["promptlearn"]["fit_time_s"] = round(fit_elapsed, 2)
+        result["promptlearn"]["prepass_time_s"] = round(_prepass_time[0], 2)
+        result["promptlearn"]["predict_time_s"] = round(predict_elapsed, 4)
         result["promptlearn"]["generated_code"] = clf.raw_python_code_
         result["promptlearn"]["fit_prompt"] = getattr(clf, "fit_prompt_", None)
         result["promptlearn"]["context_prepass_prompt"] = getattr(clf, "context_prepass_prompt_", None)
         result["promptlearn"]["context_summary"] = getattr(clf, "context_summary_", None)
         acc = result["promptlearn"]["accuracy"]
-        _print(f"{tag} accuracy={acc:.3f}  ✓")
+        _print(f"{tag} accuracy={acc:.3f}  fit={fit_elapsed:.1f}s  predict={predict_elapsed:.4f}s  ✓")
     except Exception as e:
         elapsed = time.time() - t0
         _print(f"{tag} FAILED after {elapsed:.1f}s: {e}")
