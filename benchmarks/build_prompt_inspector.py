@@ -265,20 +265,21 @@ JS = textwrap.dedent("""\
     function renderPrompt(text) {
       if (!text) return "<span class='no-data'>not stored</span>";
       const lines = text.split("\\n");
-      let out = "", firstLine = true;
+      let out = "", firstLine = true, emitted = false;
       for (const line of lines) {
+        if (!emitted && line.trim() === "") continue;
         if (firstLine && line.includes("search the web")) {
           out += `<div class="web-preamble">${esc(line)}</div>`;
-          firstLine = false;
+          firstLine = false; emitted = true;
           continue;
         }
-        firstLine = false;
+        firstLine = false; emitted = true;
         if (line === "__CONTEXT_START__")
           out += `<span class="prompt-section-label">── Dataset context ──</span>\\n`;
         else if (line === "__CONTEXT_END__")
           out += `<span class="prompt-section-label">── End context ──</span>\\n`;
         else if (line.trim().startsWith("Output a single valid Python"))
-          out += `\\n<span class="prompt-section-label">── Task instructions ──</span>\\n${esc(line)}\\n`;
+          out += `<span class="prompt-section-label">── Task instructions ──</span>\\n${esc(line)}\\n`;
         else if (line.trim() === "__DATA_MARKER__")
           out += `\\n<span class="prompt-section-label">── Training data ──</span>\\n`;
         else
