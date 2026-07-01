@@ -28,11 +28,13 @@ ALLOWED_STATE_FIELDS = {
     "max_train_rows",
     "max_retries",
     "web_search",
+    "context_prepass",
     "target_name_",
     "feature_names_",
     "raw_python_code_",
     "python_code_",
     "explanation_",
+    "context_summary_",
     "new_feature_names_",  # PromptFeatureEngineer
 }
 

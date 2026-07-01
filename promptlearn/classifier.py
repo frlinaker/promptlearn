@@ -45,6 +45,7 @@ class PromptClassifier(ClassifierMixin, BasePromptEstimator):
         max_train_rows: int | None = None,
         max_retries: int = 2,
         web_search: bool = False,
+        context_prepass: bool = True,
     ):
         super().__init__(
             model=resolve_model(model),
@@ -52,6 +53,7 @@ class PromptClassifier(ClassifierMixin, BasePromptEstimator):
             max_train_rows=max_train_rows,
             max_retries=max_retries,
             web_search=web_search,
+            context_prepass=context_prepass,
         )
 
     def fit(

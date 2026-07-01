@@ -49,18 +49,21 @@ class BasePromptEstimator(BaseEstimator):
         max_train_rows: Optional[int],
         max_retries: int = 2,
         web_search: bool = False,
+        context_prepass: bool = True,
     ):
         self.model = model
         self.verbose = verbose
         self.max_train_rows = max_train_rows
         self.max_retries = max_retries
         self.web_search = web_search
+        self.context_prepass = context_prepass
         self.predict_fn: Optional[Callable] = None
         self.target_name_: Optional[str] = None
         self.feature_names_: Optional[list] = None
         self.raw_python_code_: Optional[str] = None
         self.python_code_: Optional[str] = None
         self.explanation_: Optional[Explanation] = None
+        self.context_summary_: Optional[str] = None
 
     # used by GridSearchCV
     def get_params(self, deep=True):
@@ -71,6 +74,7 @@ class BasePromptEstimator(BaseEstimator):
             "max_train_rows": self.max_train_rows,
             "max_retries": self.max_retries,
             "web_search": self.web_search,
+            "context_prepass": self.context_prepass,
         }
 
     # used by GridSearchCV
@@ -183,13 +187,86 @@ class BasePromptEstimator(BaseEstimator):
             logger.error("LLM call failed: %s", e)
             raise RuntimeError(f"LLM call failed: {e}")
 
+    def _build_dataset_context(
+        self,
+        dataset_description: str,
+        feature_names: list,
+        sample_df,
+        target_name: str,
+    ) -> str:
+        """Run a pre-pass LLM call to produce a clean, structured dataset context block.
+
+        Takes the raw description, column names, and a small sample of values and
+        asks the LLM to:
+          - Strip boilerplate, citations, and metadata noise
+          - Explain what each column measures (decode acronyms, expand short names)
+          - Map known categorical short-values to their meanings (e.g. 'f'/'t', codes)
+          - Note the prediction target and what its values mean
+          - Output a compact, self-contained paragraph or table — no code
+
+        If web_search is True the same flag is forwarded so the model can look up
+        domain schemas (e.g. UCI attribute glossaries).
+        """
+        import pandas as pd
+
+        # Build a value-summary: unique values per column, capped to keep prompt short
+        value_lines = []
+        for col in feature_names:
+            uniq = sample_df[col].dropna().unique()
+            preview = sorted(str(v) for v in uniq[:20])
+            suffix = ", ..." if len(uniq) > 20 else ""
+            value_lines.append(f"  {col}: {', '.join(preview)}{suffix}")
+        value_summary = "\n".join(value_lines)
+
+        target_uniq = sorted(str(v) for v in sample_df[target_name].dropna().unique()[:20])
+
+        prompt = (
+            "You are preparing a structured dataset summary that will be embedded in a "
+            "machine-learning prompt. Your output will be read by an LLM that will write "
+            "a Python predict() function — so precision and brevity matter more than prose.\n\n"
+            "Given the raw dataset description and column information below, produce a clean "
+            "context block that:\n"
+            "1. States in one sentence what the dataset predicts and what each target value means.\n"
+            "2. For every column, explains what it measures. Decode any abbreviations or acronyms. "
+            "If values are short codes (e.g. 'f'/'t', single letters, integers used as categories), "
+            "map them to their real meaning.\n"
+            "3. Strips all boilerplate: citations, donor info, file format descriptions, "
+            "download notices, and instance/attribute counts.\n"
+            "4. Is compact: aim for under 400 words. Use a table or bullet list for columns if "
+            "there are more than 5.\n\n"
+            "--- Raw dataset description ---\n"
+            f"{dataset_description.strip()}\n"
+            "--- End raw description ---\n\n"
+            f"Target column: {target_name}\n"
+            f"Target values seen: {', '.join(target_uniq)}\n\n"
+            "Feature columns and their observed values:\n"
+            f"{value_summary}\n\n"
+            "Output only the clean context block. No code, no markdown fences, no preamble."
+        )
+
+        logger.info("[Context pre-pass] Calling LLM to summarize dataset context...")
+        try:
+            result = self._call_llm(prompt, web_search=self.web_search)
+            result = result.strip()
+            logger.info("[Context pre-pass] Result:\n%s", result)
+            return result
+        except Exception as e:
+            logger.warning(
+                "[Context pre-pass] Failed (%s); falling back to raw description.", e
+            )
+            return sanitize_dataset_description(dataset_description)
+
     def _build_prompt_without_data(
         self,
         prompt: str,
         synthetic_features: Optional[list],
-        dataset_description: Optional[str],
+        context_block: Optional[str],
     ) -> str:
-        """Build the prompt with {data} still present as a placeholder."""
+        """Build the prompt with {data} still present as a placeholder.
+
+        ``context_block`` is the already-processed dataset context string (either
+        the output of ``_build_dataset_context`` or a sanitized raw description).
+        """
         if synthetic_features:
             synthetic_note = (
                 f"\nNote: the following columns are SYNTHETIC features pre-computed by a "
@@ -199,9 +276,9 @@ class BasePromptEstimator(BaseEstimator):
             )
             prompt = synthetic_note + prompt
 
-        if dataset_description:
+        if context_block:
             prompt = (
-                f"--- Dataset context ---\n{sanitize_dataset_description(dataset_description)}\n"
+                f"--- Dataset context ---\n{context_block}\n"
                 f"--- End context ---\n\n"
             ) + prompt
 
@@ -287,6 +364,7 @@ class BasePromptEstimator(BaseEstimator):
     ):
         data, self.feature_names_, self.target_name_ = prepare_training_data(X, y)
         self.explanation_ = None  # invalidate any cached explanation from a prior fit
+        self.context_summary_ = None
 
         if self.max_train_rows is not None and len(data) > self.max_train_rows:
             logger.info(
@@ -295,8 +373,22 @@ class BasePromptEstimator(BaseEstimator):
             )
             data = data.sample(self.max_train_rows, random_state=42)
 
+        # Context pre-pass: replace raw description with a clean, structured summary.
+        if dataset_description and self.context_prepass:
+            self.context_summary_ = self._build_dataset_context(
+                dataset_description,
+                self.feature_names_,
+                data,
+                self.target_name_,
+            )
+            context_block = self.context_summary_
+        elif dataset_description:
+            context_block = sanitize_dataset_description(dataset_description)
+        else:
+            context_block = None
+
         prompt_template = self._build_prompt_without_data(
-            prompt, synthetic_features, dataset_description
+            prompt, synthetic_features, context_block
         )
         sample_df = self._truncate_to_context_window(data, prompt_template)
 
