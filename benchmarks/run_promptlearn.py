@@ -181,23 +181,21 @@ def run_dataset_model(
         )
 
         # Patch _call_llm to print each LLM sub-step and accumulate per-stage timing.
-        _call_count = [0]
         _prepass_time = [0.0]
         _fit_llm_time = [0.0]  # code-gen + extend + retries
+        _codegen_count = [0]
         _orig_call_llm = clf._call_llm  # bound method
 
         def _instrumented_call_llm(prompt: str, web_search: bool = False) -> str:
-            _call_count[0] += 1
-            n = _call_count[0]
             is_prepass = "preparing a structured dataset summary" in prompt
+            is_extend = "extend any such mappings" in prompt
             if is_prepass:
                 step = "context pre-pass"
-            elif "extend any such mappings" in prompt:
+            elif is_extend:
                 step = "extend pass"
-            elif n == 1:
-                step = "code generation"
             else:
-                step = f"retry #{n - 1}"
+                _codegen_count[0] += 1
+                step = "code generation" if _codegen_count[0] == 1 else f"retry #{_codegen_count[0] - 1}"
             ws_note = " [+web]" if web_search else ""
             _print(f"{tag}   → {step}{ws_note}…")
             t_llm = time.time()
