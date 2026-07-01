@@ -59,7 +59,7 @@ class PromptFeatureEngineer(TransformerMixin, BasePromptEstimator):
         self,
         model=None,
         verbose: bool = True,
-        max_train_rows: int = 100,
+        max_train_rows: int | None = None,
         max_retries: int = 2,
         web_search: bool = False,
     ):
@@ -102,10 +102,10 @@ class PromptFeatureEngineer(TransformerMixin, BasePromptEstimator):
             sample_source = data
             target_line = "No target is provided; engineer broadly useful features.\n"
 
-        if len(sample_source) > self.max_train_rows:
+        if self.max_train_rows is not None and len(sample_source) > self.max_train_rows:
             logger.info(
-                f"Reducing training data from {sample_source.shape[0]:,} to "
-                f"{self.max_train_rows:,} rows for LLM."
+                "Reducing training data from %d to %d rows (max_train_rows).",
+                len(sample_source), self.max_train_rows,
             )
             sample_df = sample_source.sample(self.max_train_rows, random_state=42)
         else:
@@ -347,7 +347,7 @@ class AdaptiveFeatureEngineer(BaseEstimator, TransformerMixin):
         probe_size: float = 0.3,
         cv: int = 3,
         verbose: bool = True,
-        max_train_rows: int = 100,
+        max_train_rows: int | None = None,
         max_retries: int = 2,
     ):
         self.model = model

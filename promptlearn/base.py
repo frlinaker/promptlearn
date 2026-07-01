@@ -24,6 +24,10 @@ logger = logging.getLogger("promptlearn")
 # PROMPTLEARN_MODEL environment variable is unset.
 DEFAULT_MODEL = "gpt-5.5"
 
+# Fraction of the model's max_input_tokens budget reserved for the prompt.
+# The remainder covers generated code output and any retry echoes.
+_CONTEXT_HEADROOM = 0.80
+
 
 def resolve_model(model: Optional[str]) -> str:
     """Resolve the model string for an estimator.
@@ -42,7 +46,7 @@ class BasePromptEstimator(BaseEstimator):
         self,
         model: str,
         verbose: bool,
-        max_train_rows: int,
+        max_train_rows: Optional[int],
         max_retries: int = 2,
         web_search: bool = False,
     ):
@@ -179,6 +183,100 @@ class BasePromptEstimator(BaseEstimator):
             logger.error("LLM call failed: %s", e)
             raise RuntimeError(f"LLM call failed: {e}")
 
+    def _build_prompt_without_data(
+        self,
+        prompt: str,
+        synthetic_features: Optional[list],
+        dataset_description: Optional[str],
+    ) -> str:
+        """Build the prompt with {data} still present as a placeholder."""
+        if synthetic_features:
+            synthetic_note = (
+                f"\nNote: the following columns are SYNTHETIC features pre-computed by a "
+                f"feature engineering step: {', '.join(synthetic_features)}. "
+                "Treat them as weak hints only — do NOT build your primary logic around them. "
+                "Base your prediction mainly on the original (non-synthetic) columns.\n"
+            )
+            prompt = synthetic_note + prompt
+
+        if dataset_description:
+            prompt = (
+                f"--- Dataset context ---\n{sanitize_dataset_description(dataset_description)}\n"
+                f"--- End context ---\n\n"
+            ) + prompt
+
+        if self.web_search:
+            prompt = (
+                "You may search the web to look up information about these features "
+                "and their real-world relationships before writing the predict function.\n\n"
+            ) + prompt
+
+        return prompt
+
+    def _truncate_to_context_window(self, df, prompt_template: str) -> "pd.DataFrame":
+        """Return df truncated so the full prompt fits within the model's context window.
+
+        Builds the prompt with all rows, counts tokens, and removes rows from the
+        bottom until it fits. Warns once if any truncation occurs. If the model's
+        context window is unknown, returns df unchanged with a warning.
+        """
+        import litellm
+        import pandas as pd
+
+        try:
+            info = litellm.get_model_info(self.model)
+            max_input = info.get("max_input_tokens")
+            if not max_input:
+                raise ValueError("max_input_tokens not available")
+        except Exception as e:
+            logger.warning(
+                "Could not determine context window for model %r (%s) — "
+                "skipping token-limit check.",
+                self.model, e,
+            )
+            return df
+
+        budget = int(max_input * _CONTEXT_HEADROOM)
+
+        csv = df.to_csv(index=False)
+        full_prompt = prompt_template.replace("{data}", csv)
+        n_tokens = litellm.token_counter(
+            model=self.model,
+            messages=[{"role": "user", "content": full_prompt}],
+        )
+
+        if n_tokens <= budget:
+            return df
+
+        # Binary-search for the largest row count that fits.
+        original_rows = len(df)
+        lo, hi = 1, original_rows
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            csv = df.iloc[:mid].to_csv(index=False)
+            prompt = prompt_template.replace("{data}", csv)
+            if litellm.token_counter(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+            ) <= budget:
+                lo = mid
+            else:
+                hi = mid - 1
+
+        kept = lo
+        warnings.warn(
+            f"Training data ({original_rows:,} rows, ~{n_tokens:,} tokens) exceeds "
+            f"{_CONTEXT_HEADROOM:.0%} of {self.model!r} context window "
+            f"({max_input:,} tokens). Truncating to {kept:,} rows.",
+            UserWarning,
+            stacklevel=4,
+        )
+        logger.warning(
+            "Truncating training data from %d to %d rows to fit context window.",
+            original_rows, kept,
+        )
+        return df.iloc[:kept].copy()
+
     def _fit(
         self,
         X,
@@ -190,39 +288,19 @@ class BasePromptEstimator(BaseEstimator):
         data, self.feature_names_, self.target_name_ = prepare_training_data(X, y)
         self.explanation_ = None  # invalidate any cached explanation from a prior fit
 
-        # Use a small sample for LLM to avoid expensive calls
-        if len(data) > self.max_train_rows:
+        if self.max_train_rows is not None and len(data) > self.max_train_rows:
             logger.info(
-                f"Reducing training data from {data.shape[0]:,} to {self.max_train_rows:,} rows for LLM."
+                "Reducing training data from %d to %d rows (max_train_rows).",
+                len(data), self.max_train_rows,
             )
-            sample_df = data.sample(self.max_train_rows, random_state=42)
-        else:
-            sample_df = data
+            data = data.sample(self.max_train_rows, random_state=42)
 
-        csv_data = sample_df.to_csv(index=False)
+        prompt_template = self._build_prompt_without_data(
+            prompt, synthetic_features, dataset_description
+        )
+        sample_df = self._truncate_to_context_window(data, prompt_template)
 
-        if synthetic_features:
-            synthetic_note = (
-                f"\nNote: the following columns are SYNTHETIC features pre-computed by a "
-                f"feature engineering step: {', '.join(synthetic_features)}. "
-                "Treat them as weak hints only — do NOT build your primary logic around them. "
-                "Base your prediction mainly on the original (non-synthetic) columns.\n"
-            )
-            prompt = synthetic_note + prompt
-
-        base_prompt = prompt.replace("{data}", csv_data)
-
-        if dataset_description:
-            base_prompt = (
-                f"--- Dataset context ---\n{sanitize_dataset_description(dataset_description)}\n"
-                f"--- End context ---\n\n"
-            ) + base_prompt
-
-        if self.web_search:
-            base_prompt = (
-                "You may search the web to look up information about these features "
-                "and their real-world relationships before writing the predict function.\n\n"
-            ) + base_prompt
+        base_prompt = prompt_template.replace("{data}", sample_df.to_csv(index=False))
 
         self.fit_prompt_ = base_prompt
         logger.info(f"[LLM Prompt]\n{base_prompt}")

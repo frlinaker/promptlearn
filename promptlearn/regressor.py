@@ -39,7 +39,7 @@ class PromptRegressor(RegressorMixin, BasePromptEstimator):
         self,
         model=None,
         verbose: bool = True,
-        max_train_rows: int = 100,
+        max_train_rows: int | None = None,
         max_retries: int = 2,
         web_search: bool = False,
     ):
