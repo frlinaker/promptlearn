@@ -270,7 +270,7 @@ JS = textwrap.dedent("""\
         else if (line.trim().startsWith("Output a single valid Python"))
           out += `\\n<span class="prompt-section-label">── Task instructions ──</span>\\n${esc(line)}\\n`;
         else if (line.trim() === "__DATA_MARKER__")
-          out += `\\n<span class="prompt-section-label">── CSV sample ──</span>\\n`;
+          out += `\\n<span class="prompt-section-label">── Training data ──</span>\\n`;
         else
           out += esc(line) + "\\n";
       }
