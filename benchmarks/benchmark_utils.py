@@ -15,6 +15,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from adjustText import adjust_text
 from sklearn.datasets import fetch_openml
 from sklearn.metrics import (
     accuracy_score,
@@ -356,6 +357,9 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
     import seaborn as sns
 
     sns.set_theme(style="whitegrid", palette="muted", font_scale=1.1)
+    import matplotlib as mpl
+    mpl.rcParams["grid.alpha"] = 0.18
+    mpl.rcParams["grid.color"] = "#b0b0b0"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # ── shared prep ──────────────────────────────────────────────────────────
@@ -394,8 +398,11 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
     # ── 1. Timeline: mean accuracy vs model release date ─────────────────────
     fig, ax = plt.subplots(figsize=(12, 6))
 
+    _baseline_ys: list[float] = []
+
     if not lr_data.empty:
         lr_mean = lr_data["accuracy"].mean()
+        _baseline_ys.append(lr_mean)
         ax.axhline(
             lr_mean,
             color="#4878CF",
@@ -406,6 +413,7 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
 
     if not xgb_data.empty:
         xgb_mean = xgb_data["accuracy"].mean()
+        _baseline_ys.append(xgb_mean)
         ax.axhline(
             xgb_mean,
             color="#6ACC65",
@@ -416,6 +424,7 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
 
     if not tabpfn_data.empty:
         tabpfn_mean = tabpfn_data["accuracy"].mean()
+        _baseline_ys.append(tabpfn_mean)
         ax.axhline(
             tabpfn_mean,
             color="#FF7F0E",
@@ -428,7 +437,7 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
     # per provider (+web models).  Cumulative-max envelope so weaker models
     # don't cause visual dips.
     provider_styles = {
-        "openai": {"color": "#D65F5F", "marker": "o", "label": "promptlearn / OpenAI"},
+        "openai": {"color": "#D65F5F", "marker": "o", "label": "promptlearn / OpenAI GPT"},
         "google": {
             "color": "#4285F4",
             "marker": "s",
@@ -437,6 +446,9 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
     }
     if "web_search" not in pl_data.columns:
         pl_data["web_search"] = False
+
+    _annotation_texts: list = []
+    _scatter_objects: list = []
 
     if not pl_data.empty:
         # Split standard vs web-search rows
@@ -453,13 +465,14 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
 
             # Cumulative-max envelope line (the "best so far" trajectory).
             grp["best_so_far"] = grp["accuracy"].cummax()
+            final_acc = grp["best_so_far"].iloc[-1]
             ax.plot(
                 grp["release_date"],
                 grp["best_so_far"],
                 color=color,
                 linewidth=2.5,
                 linestyle="-",
-                label=style["label"],
+                label=f"{style['label']} ({final_acc:.3f})",
                 zorder=3,
             )
 
@@ -467,26 +480,29 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
             for _, row in grp.iterrows():
                 is_best = abs(row["accuracy"] - row["best_so_far"]) < 1e-9
                 alpha = 1.0 if is_best else 0.55
-                ax.scatter(
+                sc = ax.scatter(
                     row["release_date"],
                     row["accuracy"],
-                    marker=style["marker"],
-                    s=80,
+                    marker="o",
+                    s=60,
                     color=color,
                     alpha=alpha,
                     zorder=4,
                 )
-                ax.annotate(
-                    f"{row['accuracy']:.3f}\n{row['llm_label']}",
-                    xy=(row["release_date"], row["accuracy"]),
-                    xytext=(0, 14),
-                    textcoords="offset points",
+                _scatter_objects.append(sc)
+                txt = ax.text(
+                    row["release_date"],
+                    row["accuracy"],
+                    row["llm_label"],
                     ha="center",
-                    fontsize=8.5,
+                    va="bottom",
+                    fontsize=7.5,
                     color=color,
                     alpha=alpha,
-                    arrowprops=dict(arrowstyle="-", color=color, lw=0.8, alpha=alpha),
+                    zorder=6,
+                    bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.8),
                 )
+                _annotation_texts.append(txt)
 
         # Web-search variants: separate dashed envelope line per provider,
         # star markers, annotations offset to the right to avoid overlap.
@@ -497,16 +513,17 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
                 {"color": "#999", "marker": "o", "label": f"promptlearn / {provider}"},
             )
             color = style["color"]
-            web_label = f"promptlearn / {'OpenAI' if provider == 'openai' else 'Google Gemini'} +web"
+            web_label = f"promptlearn / {'OpenAI GPT' if provider == 'openai' else 'Google Gemini'} +web"
 
             grp["best_so_far"] = grp["accuracy"].cummax()
+            final_acc_web = grp["best_so_far"].iloc[-1]
             ax.plot(
                 grp["release_date"],
                 grp["best_so_far"],
                 color=color,
                 linewidth=2.0,
-                linestyle="--",
-                label=web_label,
+                linestyle=":",
+                label=f"{web_label} ({final_acc_web:.3f})",
                 zorder=3,
                 alpha=0.85,
             )
@@ -514,33 +531,68 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
             for _, row in grp.iterrows():
                 is_best = abs(row["accuracy"] - row["best_so_far"]) < 1e-9
                 alpha = 0.9 if is_best else 0.5
-                ax.scatter(
+                sc = ax.scatter(
                     row["release_date"],
                     row["accuracy"],
-                    marker="*",
-                    s=160,
-                    color=color,
+                    marker="o",
+                    s=60,
+                    facecolors="white",
+                    edgecolors=color,
+                    linewidths=1.5,
                     alpha=alpha,
                     zorder=5,
                 )
-                ax.annotate(
-                    f"{row['accuracy']:.3f}\n{row['llm_label']}",
-                    xy=(row["release_date"], row["accuracy"]),
-                    xytext=(28, 0),
-                    textcoords="offset points",
-                    ha="left",
-                    fontsize=8.5,
+                _scatter_objects.append(sc)
+                txt = ax.text(
+                    row["release_date"],
+                    row["accuracy"],
+                    row["llm_label"],
+                    ha="center",
+                    va="bottom",
+                    fontsize=7.5,
                     color=color,
                     alpha=alpha,
-                    arrowprops=dict(arrowstyle="-", color=color, lw=0.8, alpha=alpha),
+                    zorder=6,
+                    bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.8),
                 )
+                _annotation_texts.append(txt)
 
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
     ax.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=4, maxticks=10))
     fig.autofmt_xdate(rotation=30)
     ax.yaxis.set_major_formatter(mticker.PercentFormatter(xmax=1.0, decimals=0))
     all_acc = pl_data["accuracy"]
-    ax.set_ylim(max(0.0, all_acc.min() - 0.08), min(1.02, all_acc.max() + 0.12))
+    # Extra top margin so labels for the top-right cluster have room to spread.
+    ax.set_ylim(max(0.0, all_acc.min() - 0.08), min(1.05, all_acc.max() + 0.20))
+
+    if _annotation_texts:
+        # Collect scatter x/y coords so adjust_text can repel labels from points.
+        _pt_x = [sc.get_offsets()[:, 0].tolist() for sc in _scatter_objects]
+        _pt_x = [x for sub in _pt_x for x in sub]
+        _pt_y = [sc.get_offsets()[:, 1].tolist() for sc in _scatter_objects]
+        _pt_y = [y for sub in _pt_y for y in sub]
+
+        # Add phantom points along each baseline so labels are repelled from them.
+        if _baseline_ys and _pt_x:
+            import numpy as _np
+            x_min, x_max = min(_pt_x), max(_pt_x)
+            _phantom_x = _np.linspace(x_min, x_max, 30).tolist()
+            for _by in _baseline_ys:
+                _pt_x.extend(_phantom_x)
+                _pt_y.extend([_by] * 30)
+
+        adjust_text(
+            _annotation_texts,
+            x=_pt_x,
+            y=_pt_y,
+            ax=ax,
+            arrowprops=dict(arrowstyle="-", color="#888", lw=0.7),
+            expand=(2.0, 2.0),
+            force_text=(1.5, 1.5),
+            force_points=(2.0, 2.0),
+            avoid_self=True,
+            only_move={"text": "xy", "points": "xy"},
+        )
     ax.set_xlabel("Model release date", fontsize=12)
     ax.set_ylabel(f"Mean accuracy ({n_datasets} OpenML datasets)", fontsize=12)
     ax.set_title(
@@ -555,7 +607,7 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
         m = _re.search(r"\((\d+\.\d+)\)", hl[1])
         return -float(m.group(1)) if m else 0.0
     handles, labels = zip(*sorted(zip(handles, labels), key=_legend_sort_key)) if handles else (handles, labels)
-    ax.legend(handles, labels, fontsize=10, loc="lower right")
+    ax.legend(handles, labels, fontsize=8, loc="upper left")
     fig.tight_layout()
     out = output_dir / "model_progression.png"
     fig.savefig(out, dpi=150)
@@ -664,7 +716,7 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
                     continue
                 prov = row["provider"]
                 color = _provider_bar_color.get(prov, "#999999")
-                prov_name = "OpenAI" if prov == "openai" else "Google Gemini"
+                prov_name = "OpenAI GPT" if prov == "openai" else "Google Gemini"
                 label_str = f"promptlearn / {prov_name}"
                 bar = ax.bar(
                     i, row["accuracy"], color=color,
@@ -690,7 +742,7 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
             ax.set_ylim(0, 1.12)
             ax.set_ylabel(f"Mean accuracy ({n_datasets} datasets)", fontsize=11)
             ax.set_title(title_suffix, fontsize=12, fontweight="bold")
-            ax.grid(axis="y", alpha=0.4)
+            ax.grid(axis="y", alpha=0.18)
             handles_l, labels_l = ax.get_legend_handles_labels()
             def _lk(hl):
                 m = _re.search(r"\((\d+\.\d+)\)", hl[1])
@@ -771,7 +823,7 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
             ax4.yaxis.set_major_formatter(
                 mticker.PercentFormatter(xmax=1.0, decimals=1)
             )
-            ax4.grid(axis="y", alpha=0.4)
+            ax4.grid(axis="y", alpha=0.18)
             fig4.tight_layout()
             out4 = output_dir / "gap_to_baseline.png"
             fig4.savefig(out4, dpi=150)
@@ -793,6 +845,8 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
             ds_df = df[df["dataset"] == dataset].copy()
             ds_df["release_date"] = pd.to_datetime(ds_df["release_date"])
             ds_df = ds_df.sort_values("release_date")
+
+            _ds_baseline_ys: list[float] = []
 
             for learner, color, ls, lw in [
                 ("logreg", "#4878CF", "--", 1.5),
@@ -818,107 +872,93 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
                     linestyle=ls,
                     label=f"{learner} ({val:.3f})",
                 )
+                _ds_baseline_ys.append(val)
 
-            # promptlearn — solid envelope line per provider (base), dashed for +web.
+            # promptlearn — solid envelope line per provider (base), dotted for +web.
+            # Final accuracy shown in legend label; no inline text annotations.
             pl_ds = ds_df[ds_df["learner"].str.startswith("promptlearn[")].reset_index(drop=True).copy()
             if "web_search" not in pl_ds.columns:
                 pl_ds["web_search"] = False
             pl_ds["web_search"] = pl_ds["web_search"].fillna(False).astype(bool)
             pl_ds["release_date"] = pd.to_datetime(pl_ds["release_date"])
             ds_provider_styles = {
-                "openai": {"color": "#D65F5F", "marker": "o", "label": "OpenAI"},
-                "google": {"color": "#4285F4", "marker": "s", "label": "Gemini"},
+                "openai": {"color": "#D65F5F", "label": "OpenAI GPT"},
+                "google": {"color": "#4285F4", "label": "Gemini"},
             }
             pl_ds_base = pl_ds[~pl_ds["web_search"]].copy()
             pl_ds_web = pl_ds[pl_ds["web_search"]].copy()
 
+            ds_acc = ds_df["accuracy"]
+            ax.set_ylim(max(0.0, ds_acc.min() - 0.08), min(1.05, ds_acc.max() + 0.08))
+
             for provider, grp in pl_ds_base.groupby("provider"):
                 grp = grp.sort_values("release_date").reset_index(drop=True)
-                pstyle = ds_provider_styles.get(
-                    provider, {"color": "#999", "marker": "o", "label": provider}
-                )
+                pstyle = ds_provider_styles.get(provider, {"color": "#999", "label": provider})
                 grp["best_so_far"] = grp["accuracy"].cummax()
+                final_acc = grp["accuracy"].iloc[-1]
                 ax.plot(
                     grp["release_date"],
                     grp["best_so_far"],
                     color=pstyle["color"],
                     linewidth=2.2,
                     linestyle="-",
-                    label=f"promptlearn/{pstyle['label']}",
+                    label=f"promptlearn/{pstyle['label']} ({final_acc:.3f})",
                     zorder=3,
                 )
                 for _, row in grp.iterrows():
                     is_best = abs(row["accuracy"] - row["best_so_far"]) < 1e-9
-                    alpha = 1.0 if is_best else 0.45
                     ax.scatter(
                         row["release_date"],
                         row["accuracy"],
-                        marker=pstyle["marker"],
+                        marker="o",
                         s=40,
                         color=pstyle["color"],
-                        alpha=alpha,
+                        alpha=1.0 if is_best else 0.45,
                         zorder=4,
-                    )
-                    ax.annotate(
-                        f"{row['accuracy']:.3f}",
-                        xy=(row["release_date"], row["accuracy"]),
-                        xytext=(0, 7),
-                        textcoords="offset points",
-                        ha="center",
-                        fontsize=7,
-                        color=pstyle["color"],
-                        alpha=alpha,
                     )
 
             for provider, grp in pl_ds_web.groupby("provider"):
                 grp = grp.sort_values("release_date").reset_index(drop=True)
-                pstyle = ds_provider_styles.get(
-                    provider, {"color": "#999", "marker": "o", "label": provider}
-                )
+                pstyle = ds_provider_styles.get(provider, {"color": "#999", "label": provider})
                 color = pstyle["color"]
                 grp["best_so_far"] = grp["accuracy"].cummax()
+                final_acc = grp["accuracy"].iloc[-1]
                 ax.plot(
                     grp["release_date"],
                     grp["best_so_far"],
                     color=color,
                     linewidth=1.8,
-                    linestyle="--",
-                    label=f"promptlearn/{pstyle['label']} +web",
+                    linestyle=":",
+                    label=f"promptlearn/{pstyle['label']} +web ({final_acc:.3f})",
                     zorder=3,
                     alpha=0.85,
                 )
                 for _, row in grp.iterrows():
                     is_best = abs(row["accuracy"] - row["best_so_far"]) < 1e-9
-                    alpha = 0.85 if is_best else 0.4
                     ax.scatter(
                         row["release_date"],
                         row["accuracy"],
-                        marker="*",
-                        s=35,
-                        color=color,
-                        alpha=alpha,
+                        marker="o",
+                        s=40,
+                        facecolors="white",
+                        edgecolors=color,
+                        linewidths=1.2,
+                        alpha=0.85 if is_best else 0.4,
                         zorder=5,
-                    )
-                    ax.annotate(
-                        f"{row['accuracy']:.3f}",
-                        xy=(row["release_date"], row["accuracy"]),
-                        xytext=(7, 0),
-                        textcoords="offset points",
-                        ha="left",
-                        fontsize=7,
-                        color=color,
-                        alpha=alpha,
                     )
 
             ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
             ax.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=2, maxticks=5))
             ax.yaxis.set_major_formatter(mticker.PercentFormatter(xmax=1.0, decimals=0))
-            ds_acc = ds_df["accuracy"]
-            ax.set_ylim(max(0.0, ds_acc.min() - 0.1), min(1.05, ds_acc.max() + 0.15))
             ax.set_title(dataset, fontsize=11, fontweight="bold")
-            ax.legend(fontsize=7.5, loc="lower right")
+            _h, _lb = ax.get_legend_handles_labels()
+            if _h:
+                _h, _lb = zip(*sorted(zip(_h, _lb), key=lambda hl: (
+                    -float(m.group(1)) if (m := _re.search(r"\((\d+\.\d+)\)", hl[1])) else 0.0
+                )))
+            ax.legend(_h, _lb, fontsize=7.5, loc="lower right")
             ax.tick_params(axis="x", rotation=25, labelsize=7.5)
-            ax.grid(True, alpha=0.3)
+            ax.grid(True, alpha=0.18)
 
         # Hide unused subplots.
         for idx in range(len(datasets), nrows * ncols):
