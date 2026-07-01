@@ -83,25 +83,6 @@ class PromptClassifier(ClassifierMixin, BasePromptEstimator):
             return np.array(results, dtype=int)
         raise ValueError("X must be a DataFrame or ndarray.")
 
-    def _validate_predict_fn(self, predict_fn, rows, labels=None):
-        super()._validate_predict_fn(predict_fn, rows, labels or [])
-        if not labels or not rows:
-            return
-        expected_classes = set(labels)
-        if len(expected_classes) < 2:
-            return
-        # Only check coverage when there are enough rows to plausibly see every class.
-        if len(rows) < 4 * len(expected_classes):
-            return
-        predictions = {predict_fn(**row) for row in rows}
-        missing = expected_classes - predictions
-        if missing:
-            raise ValueError(
-                f"Generated predict() never produces class(es) {sorted(missing)} "
-                f"across {len(rows)} validation rows (only predicted {sorted(predictions)}). "
-                f"The function must be able to return all classes: {sorted(expected_classes)}."
-            )
-
     def score(self, X, y):
         y_pred = self.predict(X)
         y_true = np.array(y)
