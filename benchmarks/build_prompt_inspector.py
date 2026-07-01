@@ -214,8 +214,8 @@ CSS = textwrap.dedent("""\
     .model-detail { display: none; padding: 0 20px 20px; background: #fafcff; border-top: 1px solid #eef2ff; }
     .model-detail.open { display: block; }
     .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 16px; }
-    .detail-grid.three-col { grid-template-columns: 1fr 1fr 1fr; }
-    @media (max-width: 1100px) { .detail-grid.three-col { grid-template-columns: 1fr 1fr; } }
+    .detail-grid.four-col { grid-template-columns: 1fr 1fr 1fr 1fr; }
+    @media (max-width: 1300px) { .detail-grid.four-col { grid-template-columns: 1fr 1fr; } }
     @media (max-width: 860px) { .detail-grid { grid-template-columns: 1fr; } }
 
     .pane-title { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: #888; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
@@ -340,19 +340,19 @@ JS = textwrap.dedent("""\
               <span class="toggle-icon">▶</span>
             </div>
             <div class="model-detail" id="${detailId}">
-              <div class="detail-grid ${m.context_prepass_prompt ? 'three-col' : ''}">
+              <div class="detail-grid ${m.context_prepass_prompt ? 'four-col' : ''}">
                 ${m.context_prepass_prompt ? `
                 <div>
                   <div class="pane-title">Context pre-pass prompt
                     <button class="copy-btn" onclick="copyId('prepass-prompt-${detailId}');event.stopPropagation()">copy</button>
                   </div>
                   <div class="prompt-box" id="prepass-prompt-${detailId}">${renderPrompt(m.context_prepass_prompt)}</div>
-                  ${m.context_summary ? `
-                  <div class="pane-title" style="margin-top:14px">Context summary (LLM output)
+                </div>
+                <div>
+                  <div class="pane-title">Context summary (LLM output)
                     <button class="copy-btn" onclick="copyId('prepass-summary-${detailId}');event.stopPropagation()">copy</button>
                   </div>
-                  <div class="prompt-box" id="prepass-summary-${detailId}">${renderPrompt(m.context_summary)}</div>
-                  ` : ''}
+                  <div class="prompt-box" id="prepass-summary-${detailId}">${m.context_summary ? renderPrompt(m.context_summary) : '<span style="color:#aaa">—</span>'}</div>
                 </div>` : ''}
                 <div>
                   <div class="pane-title">Fit prompt (sent to LLM)
