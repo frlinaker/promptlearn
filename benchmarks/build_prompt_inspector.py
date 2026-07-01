@@ -225,7 +225,8 @@ CSS = textwrap.dedent("""\
     .web-preamble { background: #fffde7; border-left: 3px solid #f9a825; padding: 6px 10px; border-radius: 0 4px 4px 0; margin-bottom: 6px; font-style: italic; color: #5d4037; }
     .prompt-section-label { color: #1565c0; font-weight: 700; }
 
-    pre { margin: 0; border-radius: 8px; overflow: auto; max-height: 440px; border: 1px solid #e0e0e0; }
+    pre { margin: 0; border-radius: 8px; overflow: auto; max-height: 440px; border: 1px solid #e0e0e0; min-width: 0; width: 100%; }
+    .detail-grid > div { min-width: 0; }
     pre code { font-size: 0.76rem !important; line-height: 1.5 !important; }
     .no-data { color: #aaa; font-style: italic; font-size: 0.85rem; padding: 20px 0; }
 """)
