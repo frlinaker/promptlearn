@@ -609,86 +609,110 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
         logger.info("Saved heatmap → %s", out2)
         plt.close(fig2)
 
-    # ── 3. All-learner bar chart: promptlearn bars per LLM + baseline lines ──
+    # ── 3. All-learner bar chart: two rows (no-web / +web), columns aligned ──
+    # Columns = base model labels ordered by release date; gap where no web variant.
     _provider_bar_color = {"openai": "#D65F5F", "google": "#4285F4"}
     if not pl_data.empty:
-        pl_bar = (
+        pl_bar_all = (
             pl_data.groupby(["llm_label", "release_date", "provider", "web_search"])["accuracy"]
             .mean()
             .reset_index()
             .sort_values("release_date")
         )
-        llm_labels = pl_bar["llm_label"].tolist()
-        n_models = len(llm_labels)
-        x = np.arange(n_models)
+        # Determine column order from base (no-web) models only.
+        base_order = (
+            pl_bar_all[~pl_bar_all["web_search"].fillna(False)]
+            .sort_values("release_date")["llm_label"]
+            .tolist()
+        )
+        # Map base label → web label (strip " +web" suffix from web rows).
+        # Web row label is "<base_label> +web" by convention.
+        web_rows = pl_bar_all[pl_bar_all["web_search"].fillna(False)].copy()
+        web_rows["base_label"] = web_rows["llm_label"].str.replace(r"\s*\+web$", "", regex=True)
+        web_by_base: dict = {row["base_label"]: row for _, row in web_rows.iterrows()}
 
-        fig3, ax3 = plt.subplots(figsize=(max(9, n_models * 1.4), 6))
-        # Draw bars provider-by-provider; +web bars get hatching for visual distinction.
-        _bar_legend_seen: set[str] = set()
-        for i, (_, row) in enumerate(pl_bar.iterrows()):
-            prov = row["provider"]
-            is_web = bool(row.get("web_search", False))
-            color = _provider_bar_color.get(prov, "#999999")
-            prov_name = 'OpenAI' if prov == 'openai' else 'Google Gemini'
-            label_str = f"promptlearn / {prov_name}{' +web' if is_web else ''}"
-            ax3.bar(
-                i, row["accuracy"], color=color,
-                hatch="//" if is_web else "",
-                edgecolor="white" if not is_web else color,
-                linewidth=0.5,
-                label=label_str if label_str not in _bar_legend_seen else "_nolegend_",
-                zorder=3,
-            )
-            _bar_legend_seen.add(label_str)
-        bars = ax3.patches  # for annotation loop below
-        for bar, val in zip(bars, pl_bar["accuracy"]):
-            ax3.text(
-                bar.get_x() + bar.get_width() / 2,
-                bar.get_height() + 0.005,
-                f"{val:.2f}",
-                ha="center",
-                va="bottom",
-                fontsize=8,
-            )
+        n_cols = len(base_order)
+        x = np.arange(n_cols)
 
-        # Baselines as horizontal lines across all bars.
-        baseline_styles = [
+        baseline_styles_3 = [
             ("logreg", lr_data, "#4878CF", "Logistic Regression"),
             ("xgboost", xgb_data, "#6ACC65", "XGBoost"),
             ("tabpfn", tabpfn_data, "#FF7F0E", "TabPFN"),
         ]
-        for _, bdata, color, label in baseline_styles:
-            if not bdata.empty:
-                val = bdata["accuracy"].mean()
-                ax3.axhline(
-                    val,
-                    color=color,
-                    linewidth=1.8,
-                    linestyle="--",
-                    label=f"{label}  ({val:.3f})",
-                    zorder=4,
-                )
+        baseline_means_3 = {
+            lbl: bdata["accuracy"].mean()
+            for _, bdata, _, lbl in baseline_styles_3
+            if not bdata.empty
+        }
 
-        ax3.set_xticks(x)
-        ax3.set_xticklabels(llm_labels, rotation=25, ha="right", fontsize=10)
-        ax3.yaxis.set_major_formatter(mticker.PercentFormatter(xmax=1.0, decimals=0))
-        ax3.set_ylim(0, 1.12)
-        ax3.set_xlabel("LLM model (oldest → newest)", fontsize=12)
-        ax3.set_ylabel(f"Mean accuracy ({n_datasets} datasets)", fontsize=12)
-        ax3.set_title(
-            "promptlearn vs baselines: mean accuracy by LLM generation", fontsize=13
+        fig3, (ax3_top, ax3_bot) = plt.subplots(
+            2, 1,
+            figsize=(max(10, n_cols * 1.5), 10),
+            sharex=True,
         )
-        handles3, labels3 = ax3.get_legend_handles_labels()
-        def _leg3_key(hl):
-            m = _re.search(r"\((\d+\.\d+)\)", hl[1])
-            return -float(m.group(1)) if m else 0.0
-        if handles3:
-            handles3, labels3 = zip(*sorted(zip(handles3, labels3), key=_leg3_key))
-        ax3.legend(handles3, labels3, fontsize=10)
-        ax3.grid(axis="y", alpha=0.4)
+
+        base_lookup = {
+            row["llm_label"]: row
+            for _, row in pl_bar_all[~pl_bar_all["web_search"].fillna(False)].iterrows()
+        }
+
+        def _draw_bar_row(ax, lookup, title_suffix, is_web_row=False):
+            _legend_seen: set[str] = set()
+            for i, lbl in enumerate(base_order):
+                row = lookup.get(lbl)
+                if row is None:
+                    continue
+                prov = row["provider"]
+                color = _provider_bar_color.get(prov, "#999999")
+                prov_name = "OpenAI" if prov == "openai" else "Google Gemini"
+                label_str = f"promptlearn / {prov_name}"
+                bar = ax.bar(
+                    i, row["accuracy"], color=color,
+                    label=label_str if label_str not in _legend_seen else "_nolegend_",
+                    zorder=3,
+                )
+                _legend_seen.add(label_str)
+                ax.text(
+                    i, row["accuracy"] + 0.005,
+                    f"{row['accuracy']:.2f}",
+                    ha="center", va="bottom", fontsize=8,
+                )
+            for lbl, val in baseline_means_3.items():
+                color_map = {
+                    "Logistic Regression": "#4878CF",
+                    "XGBoost": "#6ACC65",
+                    "TabPFN": "#FF7F0E",
+                }
+                c = color_map.get(lbl, "#888")
+                ax.axhline(val, color=c, linewidth=1.8, linestyle="--",
+                           label=f"{lbl}  ({val:.3f})", zorder=4)
+            ax.yaxis.set_major_formatter(mticker.PercentFormatter(xmax=1.0, decimals=0))
+            ax.set_ylim(0, 1.12)
+            ax.set_ylabel(f"Mean accuracy ({n_datasets} datasets)", fontsize=11)
+            ax.set_title(title_suffix, fontsize=12, fontweight="bold")
+            ax.grid(axis="y", alpha=0.4)
+            handles_l, labels_l = ax.get_legend_handles_labels()
+            def _lk(hl):
+                m = _re.search(r"\((\d+\.\d+)\)", hl[1])
+                return -float(m.group(1)) if m else 0.0
+            if handles_l:
+                handles_l, labels_l = zip(*sorted(zip(handles_l, labels_l), key=_lk))
+            ax.legend(handles_l, labels_l, fontsize=9, loc="lower right")
+
+        _draw_bar_row(ax3_top, base_lookup, "Without web search")
+        _draw_bar_row(ax3_bot, web_by_base, "With web search  (+web variants only; gaps = no web support)")
+
+        ax3_bot.set_xticks(x)
+        ax3_bot.set_xticklabels(base_order, rotation=30, ha="right", fontsize=9)
+        ax3_bot.set_xlabel("LLM model (oldest → newest)", fontsize=12)
+
+        fig3.suptitle(
+            "promptlearn vs baselines: mean accuracy by LLM generation",
+            fontsize=13, y=1.01,
+        )
         fig3.tight_layout()
         out3 = output_dir / "all_learners_bar.png"
-        fig3.savefig(out3, dpi=150)
+        fig3.savefig(out3, dpi=150, bbox_inches="tight")
         logger.info("Saved grouped bar chart → %s", out3)
         plt.close(fig3)
 
@@ -796,10 +820,10 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
                 )
 
             # promptlearn — solid envelope line per provider (base), dashed for +web.
-            pl_ds = ds_df[ds_df["learner"].str.startswith("promptlearn[")].copy()
+            pl_ds = ds_df[ds_df["learner"].str.startswith("promptlearn[")].reset_index(drop=True).copy()
             if "web_search" not in pl_ds.columns:
                 pl_ds["web_search"] = False
-            pl_ds["web_search"] = pl_ds["web_search"].fillna(False)
+            pl_ds["web_search"] = pl_ds["web_search"].fillna(False).astype(bool)
             pl_ds["release_date"] = pd.to_datetime(pl_ds["release_date"])
             ds_provider_styles = {
                 "openai": {"color": "#D65F5F", "marker": "o", "label": "OpenAI"},
