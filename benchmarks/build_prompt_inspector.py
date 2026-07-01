@@ -259,8 +259,10 @@ JS = textwrap.dedent("""\
           continue;
         }
         firstLine = false;
-        if (line.startsWith("Dataset context:"))
-          out += `<span class="prompt-section-label">${esc(line)}</span>\\n`;
+        if (line === "--- Dataset context ---")
+          out += `<span class="prompt-section-label">── Dataset context ──</span>\\n`;
+        else if (line === "--- End context ---")
+          out += `<span class="prompt-section-label">── End context ──</span>\\n`;
         else if (line.trim().startsWith("Output a single valid Python"))
           out += `\\n<span class="prompt-section-label">── Task instructions ──</span>\\n${esc(line)}\\n`;
         else if (line.trim() === "Data:")
