@@ -9,7 +9,7 @@ from sklearn.base import BaseEstimator
 from sklearn.exceptions import NotFittedError
 
 from .explain import Explanation
-from .prompt_markers import CONTEXT_END, CONTEXT_START
+from .prompt_markers import CONTEXT_END, CONTEXT_START, DATA_MARKER
 from .utils import (
     generate_feature_dicts,
     make_predict_fn,
@@ -287,10 +287,12 @@ class BasePromptEstimator(BaseEstimator):
             prompt = synthetic_note + prompt
 
         if context_block:
-            prompt = (
-                f"{CONTEXT_START}\n{context_block}\n"
-                f"{CONTEXT_END}\n\n"
-            ) + prompt
+            context_section = f"{CONTEXT_START}\n{context_block}\n{CONTEXT_END}\n\n"
+            data_marker_line = DATA_MARKER + "\n"
+            if data_marker_line in prompt:
+                prompt = prompt.replace(data_marker_line, context_section + data_marker_line, 1)
+            else:
+                prompt = prompt + "\n" + context_section
 
         if self.web_search:
             prompt = (
