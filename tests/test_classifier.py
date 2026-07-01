@@ -401,3 +401,90 @@ def test_safe_exec_fn_non_number_string():
 
     # Should fall back to default (0) because int("not_a_number") fails
     assert safe_exec_fn(fn, {"val": "not_a_number"}) == 0
+
+
+# ---------------------------------------------------------------------------
+# Signature and class-coverage validation (regression for commit 20ad44d)
+# ---------------------------------------------------------------------------
+
+
+def test_fit_rejects_positional_arg_missing_feature(monkeypatch):
+    """predict() with fixed args that omit an expected feature must trigger a retry
+    and ultimately raise with a clear message naming the missing argument."""
+    clf = PromptClassifier(model="gpt-5.4-mini", verbose=False, max_retries=0)
+    # Returns a function that only accepts 'age', missing 'income'
+    monkeypatch.setattr(
+        clf, "_call_llm", lambda p, web_search=False: "def predict(age): return 0"
+    )
+    monkeypatch.setattr(clf, "_extend_code", lambda code: code)
+
+    with pytest.raises(ValueError, match="missing expected feature arguments"):
+        clf.fit(
+            pd.DataFrame({"age": [25, 40], "income": [30000, 80000]}),
+            pd.Series([0, 1]),
+        )
+
+
+def test_fit_rejects_function_missing_all_classes(monkeypatch):
+    """predict() that never returns a class present in training labels must be
+    rejected and the error message must name the missing class(es)."""
+    clf = PromptClassifier(model="gpt-5.4-mini", verbose=False, max_retries=0)
+    # Always returns 0, never 1 — but we have enough rows to trigger the check
+    monkeypatch.setattr(
+        clf, "_call_llm", lambda p, web_search=False: "def predict(**f): return 0"
+    )
+    monkeypatch.setattr(clf, "_extend_code", lambda code: code)
+
+    # 20 rows, 2 classes → rows (20) >= 4 * n_classes (8), check fires
+    X = pd.DataFrame({"a": range(20)})
+    y = pd.Series([0] * 10 + [1] * 10)
+
+    with pytest.raises(ValueError, match="never produces class"):
+        clf.fit(X, y)
+
+
+def test_fit_class_coverage_check_skipped_on_tiny_set(monkeypatch):
+    """Coverage check is skipped when rows < 4 * n_classes, so a function that
+    only returns 0 should pass validation on a 2-row dataset with 2 classes."""
+    clf = PromptClassifier(model="gpt-5.4-mini", verbose=False, max_retries=0)
+    monkeypatch.setattr(
+        clf, "_call_llm", lambda p, web_search=False: "def predict(**f): return 0"
+    )
+    monkeypatch.setattr(clf, "_extend_code", lambda code: code)
+
+    # 2 rows, 2 classes → rows (2) < 4 * 2 (8), check is skipped
+    X = pd.DataFrame({"a": [1, 2]})
+    y = pd.Series([0, 1])
+    clf.fit(X, y)  # must not raise
+
+
+def test_fit_class_coverage_error_names_missing_classes(monkeypatch):
+    """The ValueError for missing classes must list the specific missing class values."""
+    clf = PromptClassifier(model="gpt-5.4-mini", verbose=False, max_retries=0)
+    monkeypatch.setattr(
+        clf, "_call_llm", lambda p, web_search=False: "def predict(**f): return 0"
+    )
+    monkeypatch.setattr(clf, "_extend_code", lambda code: code)
+
+    X = pd.DataFrame({"a": range(20)})
+    y = pd.Series([0] * 10 + [1] * 10)
+
+    with pytest.raises(ValueError) as exc_info:
+        clf.fit(X, y)
+
+    assert "1" in str(exc_info.value)  # class 1 is named in the error
+
+
+def test_fit_kwargs_signature_passes_validation(monkeypatch):
+    """predict(**features) always passes the signature check regardless of column names."""
+    clf = PromptClassifier(model="gpt-5.4-mini", verbose=False, max_retries=0)
+    monkeypatch.setattr(
+        clf,
+        "_call_llm",
+        lambda p, web_search=False: "def predict(**features): return int(features.get('a', 0) > 10)",
+    )
+    monkeypatch.setattr(clf, "_extend_code", lambda code: code)
+
+    X = pd.DataFrame({"a": list(range(20))})
+    y = pd.Series([0] * 10 + [1] * 10)
+    clf.fit(X, y)  # must not raise
