@@ -50,6 +50,7 @@ class BasePromptEstimator(BaseEstimator):
         max_retries: int = 2,
         web_search: bool = False,
         context_prepass: bool = True,
+        vertex_location: Optional[str] = None,
     ):
         self.model = model
         self.verbose = verbose
@@ -57,6 +58,7 @@ class BasePromptEstimator(BaseEstimator):
         self.max_retries = max_retries
         self.web_search = web_search
         self.context_prepass = context_prepass
+        self.vertex_location = vertex_location
         self.predict_fn: Optional[Callable] = None
         self.target_name_: Optional[str] = None
         self.feature_names_: Optional[list] = None
@@ -76,6 +78,7 @@ class BasePromptEstimator(BaseEstimator):
             "max_retries": self.max_retries,
             "web_search": self.web_search,
             "context_prepass": self.context_prepass,
+            "vertex_location": self.vertex_location,
         }
 
     # used by GridSearchCV
@@ -106,6 +109,8 @@ class BasePromptEstimator(BaseEstimator):
     # Models that use the Responses API for web search (tools=[{"type": "web_search"}]).
     # GPT-5+ models on OpenAI use the Responses API; web_search_options is NOT supported.
     _WEB_SEARCH_RESPONSES_API_MODELS = {
+        "gpt-4o-mini",
+        "gpt-4.1",
         "gpt-5.5",
         "gpt-5.4-mini",
         "gpt-5.4",
@@ -173,6 +178,8 @@ class BasePromptEstimator(BaseEstimator):
                     model,
                     self._WEB_SEARCH_MODELS,
                 )
+        if self.vertex_location:
+            kwargs["vertex_location"] = self.vertex_location
 
         try:
             response = litellm.completion(

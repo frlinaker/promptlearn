@@ -63,6 +63,7 @@ class PromptFeatureEngineer(TransformerMixin, BasePromptEstimator):
         max_retries: int = 2,
         web_search: bool = False,
         context_prepass: bool = True,
+        vertex_location: str | None = None,
     ):
         super().__init__(
             model=resolve_model(model),
@@ -71,6 +72,7 @@ class PromptFeatureEngineer(TransformerMixin, BasePromptEstimator):
             max_retries=max_retries,
             web_search=web_search,
             context_prepass=context_prepass,
+            vertex_location=vertex_location,
         )
         self.new_feature_names_ = None
 

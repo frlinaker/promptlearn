@@ -29,6 +29,7 @@ ALLOWED_STATE_FIELDS = {
     "max_retries",
     "web_search",
     "context_prepass",
+    "vertex_location",
     "target_name_",
     "feature_names_",
     "raw_python_code_",

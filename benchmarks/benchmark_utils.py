@@ -47,6 +47,15 @@ MODEL_PROGRESSION = [
         "provider": "openai",
     },
     {
+        "model_id": "gpt-4o-mini+web",
+        "base_model_id": "gpt-4o-mini",
+        "label": "GPT-4o mini +web",
+        "release_date": date(2024, 7, 18),
+        "family": "GPT-4",
+        "provider": "openai",
+        "web_search": True,
+    },
+    {
         "model_id": "gpt-4.1",
         "label": "GPT-4.1",
         "release_date": date(2025, 4, 14),
@@ -54,11 +63,29 @@ MODEL_PROGRESSION = [
         "provider": "openai",
     },
     {
+        "model_id": "gpt-4.1+web",
+        "base_model_id": "gpt-4.1",
+        "label": "GPT-4.1 +web",
+        "release_date": date(2025, 4, 14),
+        "family": "GPT-4.1",
+        "provider": "openai",
+        "web_search": True,
+    },
+    {
         "model_id": "gpt-5.4-mini",
         "label": "GPT-5.4 mini",
         "release_date": date(2026, 3, 17),  # GA: Mar 17 2026
         "family": "GPT-5",
         "provider": "openai",
+    },
+    {
+        "model_id": "gpt-5.4-mini+web",
+        "base_model_id": "gpt-5.4-mini",
+        "label": "GPT-5.4 mini +web",
+        "release_date": date(2026, 3, 17),
+        "family": "GPT-5",
+        "provider": "openai",
+        "web_search": True,
     },
     {
         "model_id": "gpt-5.5",
@@ -86,6 +113,16 @@ MODEL_PROGRESSION = [
         "vertex_region": "us-central1",
     },
     {
+        "model_id": "vertex_ai/gemini-2.5-flash+web",
+        "base_model_id": "vertex_ai/gemini-2.5-flash",
+        "label": "Gemini 2.5 Flash +web",
+        "release_date": date(2025, 5, 20),
+        "family": "Gemini 2.5",
+        "provider": "google",
+        "vertex_region": "us-central1",
+        "web_search": True,
+    },
+    {
         "model_id": "vertex_ai/gemini-2.5-pro",
         "label": "Gemini 2.5 Pro",
         "release_date": date(2025, 6, 5),  # GA: Jun 5 2025
@@ -94,12 +131,32 @@ MODEL_PROGRESSION = [
         "vertex_region": "us-central1",
     },
     {
+        "model_id": "vertex_ai/gemini-2.5-pro+web",
+        "base_model_id": "vertex_ai/gemini-2.5-pro",
+        "label": "Gemini 2.5 Pro +web",
+        "release_date": date(2025, 6, 5),
+        "family": "Gemini 2.5",
+        "provider": "google",
+        "vertex_region": "us-central1",
+        "web_search": True,
+    },
+    {
         "model_id": "vertex_ai/gemini-2.5-flash-lite",
         "label": "Gemini 2.5 Flash Lite",
         "release_date": date(2025, 7, 22),  # GA: Jul 22 2025
         "family": "Gemini 2.5",
         "provider": "google",
         "vertex_region": "us-central1",
+    },
+    {
+        "model_id": "vertex_ai/gemini-2.5-flash-lite+web",
+        "base_model_id": "vertex_ai/gemini-2.5-flash-lite",
+        "label": "Gemini 2.5 Flash Lite +web",
+        "release_date": date(2025, 7, 22),
+        "family": "Gemini 2.5",
+        "provider": "google",
+        "vertex_region": "us-central1",
+        "web_search": True,
     },
     {
         "model_id": "vertex_ai/gemini-3.5-flash",
@@ -367,9 +424,9 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
             label=f"TabPFN  ({tabpfn_mean:.3f})",
         )
 
-    # promptlearn — one line per provider, colour-coded.
-    # Web-search variants are plotted as star markers offset above their base model.
-    # Use cumulative-max envelope so lite/weaker models don't cause visual dips.
+    # promptlearn — one solid line per provider (base models) + one dashed line
+    # per provider (+web models).  Cumulative-max envelope so weaker models
+    # don't cause visual dips.
     provider_styles = {
         "openai": {"color": "#D65F5F", "marker": "o", "label": "promptlearn / OpenAI"},
         "google": {
@@ -431,60 +488,52 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
                     arrowprops=dict(arrowstyle="-", color=color, lw=0.8, alpha=alpha),
                 )
 
-        # Web-search variants: star markers, lighter shade, dotted vertical connector
-        # to their same-date base model point.
-        _web_legend_added: set[str] = set()
-        for _, row in pl_web.iterrows():
-            provider = row["provider"]
+        # Web-search variants: separate dashed envelope line per provider,
+        # star markers, annotations offset to the right to avoid overlap.
+        for provider, grp in pl_web.groupby("provider"):
+            grp = grp.sort_values("release_date").reset_index(drop=True)
             style = provider_styles.get(
                 provider,
                 {"color": "#999", "marker": "o", "label": f"promptlearn / {provider}"},
             )
             color = style["color"]
-            legend_key = f"{provider}_web"
-            label = (
-                f"promptlearn / {provider.title()} +web search"
-                if legend_key not in _web_legend_added
-                else "_nolegend_"
-            )
-            _web_legend_added.add(legend_key)
-            ax.scatter(
-                row["release_date"],
-                row["accuracy"],
-                marker="*",
-                s=220,
+            web_label = f"promptlearn / {'OpenAI' if provider == 'openai' else 'Google Gemini'} +web"
+
+            grp["best_so_far"] = grp["accuracy"].cummax()
+            ax.plot(
+                grp["release_date"],
+                grp["best_so_far"],
                 color=color,
-                alpha=0.9,
-                zorder=5,
-                label=label,
+                linewidth=2.0,
+                linestyle="--",
+                label=web_label,
+                zorder=3,
+                alpha=0.85,
             )
-            # Dotted vertical line connecting to base model point (same date)
-            base_rows = pl_standard[
-                (pl_standard["provider"] == provider)
-                & (pl_standard["release_date"] == row["release_date"])
-            ]
-            if not base_rows.empty:
-                base_acc = base_rows["accuracy"].iloc[0]
-                ax.plot(
-                    [row["release_date"], row["release_date"]],
-                    [base_acc, row["accuracy"]],
+
+            for _, row in grp.iterrows():
+                is_best = abs(row["accuracy"] - row["best_so_far"]) < 1e-9
+                alpha = 0.9 if is_best else 0.5
+                ax.scatter(
+                    row["release_date"],
+                    row["accuracy"],
+                    marker="*",
+                    s=160,
                     color=color,
-                    linewidth=1.2,
-                    linestyle=":",
-                    alpha=0.7,
-                    zorder=3,
+                    alpha=alpha,
+                    zorder=5,
                 )
-            ax.annotate(
-                f"{row['accuracy']:.3f}\n{row['llm_label']}",
-                xy=(row["release_date"], row["accuracy"]),
-                xytext=(30, 0),
-                textcoords="offset points",
-                ha="left",
-                fontsize=8.5,
-                color=color,
-                alpha=0.9,
-                arrowprops=dict(arrowstyle="-", color=color, lw=0.8, alpha=0.7),
-            )
+                ax.annotate(
+                    f"{row['accuracy']:.3f}\n{row['llm_label']}",
+                    xy=(row["release_date"], row["accuracy"]),
+                    xytext=(28, 0),
+                    textcoords="offset points",
+                    ha="left",
+                    fontsize=8.5,
+                    color=color,
+                    alpha=alpha,
+                    arrowprops=dict(arrowstyle="-", color=color, lw=0.8, alpha=alpha),
+                )
 
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
     ax.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=4, maxticks=10))
@@ -564,7 +613,7 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
     _provider_bar_color = {"openai": "#D65F5F", "google": "#4285F4"}
     if not pl_data.empty:
         pl_bar = (
-            pl_data.groupby(["llm_label", "release_date", "provider"])["accuracy"]
+            pl_data.groupby(["llm_label", "release_date", "provider", "web_search"])["accuracy"]
             .mean()
             .reset_index()
             .sort_values("release_date")
@@ -572,18 +621,24 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
         llm_labels = pl_bar["llm_label"].tolist()
         n_models = len(llm_labels)
         x = np.arange(n_models)
-        bar_colors = [_provider_bar_color.get(p, "#999999") for p in pl_bar["provider"]]
 
         fig3, ax3 = plt.subplots(figsize=(max(9, n_models * 1.4), 6))
-        # Draw bars provider-by-provider so each gets its own legend entry.
+        # Draw bars provider-by-provider; +web bars get hatching for visual distinction.
         _bar_legend_seen: set[str] = set()
         for i, (_, row) in enumerate(pl_bar.iterrows()):
             prov = row["provider"]
+            is_web = bool(row.get("web_search", False))
             color = _provider_bar_color.get(prov, "#999999")
-            label_str = f"promptlearn / {'OpenAI' if prov == 'openai' else 'Google Gemini'}"
-            ax3.bar(i, row["accuracy"], color=color,
-                    label=label_str if label_str not in _bar_legend_seen else "_nolegend_",
-                    zorder=3)
+            prov_name = 'OpenAI' if prov == 'openai' else 'Google Gemini'
+            label_str = f"promptlearn / {prov_name}{' +web' if is_web else ''}"
+            ax3.bar(
+                i, row["accuracy"], color=color,
+                hatch="//" if is_web else "",
+                edgecolor="white" if not is_web else color,
+                linewidth=0.5,
+                label=label_str if label_str not in _bar_legend_seen else "_nolegend_",
+                zorder=3,
+            )
             _bar_legend_seen.add(label_str)
         bars = ax3.patches  # for annotation loop below
         for bar, val in zip(bars, pl_bar["accuracy"]):
@@ -649,24 +704,33 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
         )
         if best_baseline_acc is not None:
             pl_bar2 = (
-                pl_data.groupby(["llm_label", "release_date", "provider"])["accuracy"]
+                pl_data.groupby(["llm_label", "release_date", "provider", "web_search"])["accuracy"]
                 .mean()
                 .reset_index()
                 .sort_values("release_date")
             )
             pl_bar2["gap"] = pl_bar2["accuracy"] - best_baseline_acc
 
-            fig4, ax4 = plt.subplots(figsize=(12, 5))
+            n_gap = len(pl_bar2)
+            fig4, ax4 = plt.subplots(figsize=(max(12, n_gap * 1.1), 5))
             # Solid provider color when above baseline, desaturated when below.
-            _gap_colors = []
-            for _, row in pl_bar2.iterrows():
+            # +web bars get hatching.
+            for i, (_, row) in enumerate(pl_bar2.iterrows()):
                 base = _provider_bar_color.get(row["provider"], "#999999")
-                _gap_colors.append(base if row["gap"] >= 0 else base + "80")
-            ax4.bar(pl_bar2["llm_label"], pl_bar2["gap"], color=_gap_colors, zorder=3)
-            ax4.axhline(0, color="black", linewidth=1.0)
-            for _, row in pl_bar2.iterrows():
+                is_web = bool(row.get("web_search", False))
+                color = base if row["gap"] >= 0 else base + "80"
+                ax4.bar(
+                    i, row["gap"], color=color,
+                    hatch="//" if is_web else "",
+                    edgecolor="white" if not is_web else base,
+                    linewidth=0.5,
+                    zorder=3,
+                )
+            ax4.set_xticks(range(n_gap))
+            ax4.set_xticklabels(pl_bar2["llm_label"].tolist(), rotation=25, ha="right", fontsize=9)
+            for i, (_, row) in enumerate(pl_bar2.iterrows()):
                 ax4.text(
-                    row["llm_label"],
+                    i,
                     row["gap"] + (0.004 if row["gap"] >= 0 else -0.008),
                     f"{row['gap']:+.3f}",
                     ha="center",
@@ -677,13 +741,12 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
             ax4.set_ylabel("Accuracy gap vs best baseline", fontsize=12)
             ax4.set_title(
                 "promptlearn gap to best baseline (logreg / XGBoost / TabPFN)\n"
-                "Solid = above baseline  ·  Faded = below baseline",
+                "Solid = above baseline  ·  Faded = below  ·  // = +web search",
                 fontsize=12,
             )
             ax4.yaxis.set_major_formatter(
                 mticker.PercentFormatter(xmax=1.0, decimals=1)
             )
-            ax4.tick_params(axis="x", rotation=25)
             ax4.grid(axis="y", alpha=0.4)
             fig4.tight_layout()
             out4 = output_dir / "gap_to_baseline.png"
@@ -732,14 +795,20 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
                     label=f"{learner} ({val:.3f})",
                 )
 
-            # promptlearn — one envelope line per provider, same logic as chart 1.
+            # promptlearn — solid envelope line per provider (base), dashed for +web.
             pl_ds = ds_df[ds_df["learner"].str.startswith("promptlearn[")].copy()
+            if "web_search" not in pl_ds.columns:
+                pl_ds["web_search"] = False
+            pl_ds["web_search"] = pl_ds["web_search"].fillna(False)
             pl_ds["release_date"] = pd.to_datetime(pl_ds["release_date"])
             ds_provider_styles = {
                 "openai": {"color": "#D65F5F", "marker": "o", "label": "OpenAI"},
                 "google": {"color": "#4285F4", "marker": "s", "label": "Gemini"},
             }
-            for provider, grp in pl_ds.groupby("provider"):
+            pl_ds_base = pl_ds[~pl_ds["web_search"]].copy()
+            pl_ds_web = pl_ds[pl_ds["web_search"]].copy()
+
+            for provider, grp in pl_ds_base.groupby("provider"):
                 grp = grp.sort_values("release_date").reset_index(drop=True)
                 pstyle = ds_provider_styles.get(
                     provider, {"color": "#999", "marker": "o", "label": provider}
@@ -774,6 +843,46 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
                         ha="center",
                         fontsize=7,
                         color=pstyle["color"],
+                        alpha=alpha,
+                    )
+
+            for provider, grp in pl_ds_web.groupby("provider"):
+                grp = grp.sort_values("release_date").reset_index(drop=True)
+                pstyle = ds_provider_styles.get(
+                    provider, {"color": "#999", "marker": "o", "label": provider}
+                )
+                color = pstyle["color"]
+                grp["best_so_far"] = grp["accuracy"].cummax()
+                ax.plot(
+                    grp["release_date"],
+                    grp["best_so_far"],
+                    color=color,
+                    linewidth=1.8,
+                    linestyle="--",
+                    label=f"promptlearn/{pstyle['label']} +web",
+                    zorder=3,
+                    alpha=0.85,
+                )
+                for _, row in grp.iterrows():
+                    is_best = abs(row["accuracy"] - row["best_so_far"]) < 1e-9
+                    alpha = 0.85 if is_best else 0.4
+                    ax.scatter(
+                        row["release_date"],
+                        row["accuracy"],
+                        marker="*",
+                        s=35,
+                        color=color,
+                        alpha=alpha,
+                        zorder=5,
+                    )
+                    ax.annotate(
+                        f"{row['accuracy']:.3f}",
+                        xy=(row["release_date"], row["accuracy"]),
+                        xytext=(7, 0),
+                        textcoords="offset points",
+                        ha="left",
+                        fontsize=7,
+                        color=color,
                         alpha=alpha,
                     )
 

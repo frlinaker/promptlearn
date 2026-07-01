@@ -117,14 +117,6 @@ def run_dataset_model(
         model_id.removesuffix("+web") if web_search else model_id
     )
 
-    # Per-model region override for Vertex AI.
-    _region_override = None
-    if vertex_region:
-        current = os.environ.get("VERTEXAI_LOCATION", "")
-        if current != vertex_region:
-            os.environ["VERTEXAI_LOCATION"] = vertex_region
-            _region_override = current
-
     tag = f"[{dataset} × {model_id}]"
 
     safe_model_id = model_id.replace("/", "-")
@@ -182,7 +174,10 @@ def run_dataset_model(
     t0 = time.time()
     try:
         clf = PromptClassifier(
-            model=actual_model_id, verbose=False, web_search=web_search
+            model=actual_model_id,
+            verbose=False,
+            web_search=web_search,
+            vertex_location=vertex_region or None,
         )
 
         # Patch _call_llm to print each LLM sub-step as it starts/finishes.
@@ -243,9 +238,6 @@ def run_dataset_model(
         with open(cache_file, "w") as f:
             json.dump(result, f, indent=2, default=str)
         _print(f"{tag} cached → {cache_file.name}")
-
-    if _region_override is not None:
-        os.environ["VERTEXAI_LOCATION"] = _region_override
 
     return result
 

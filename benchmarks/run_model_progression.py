@@ -485,14 +485,6 @@ def run_dataset_model(
         model_id.removesuffix("+web") if web_search else model_id
     )
 
-    # Per-model region override for Vertex AI (some models only exist in specific regions).
-    _region_override = None
-    if vertex_region:
-        current = os.environ.get("VERTEXAI_LOCATION", "")
-        if current != vertex_region:
-            os.environ["VERTEXAI_LOCATION"] = vertex_region
-            _region_override = current  # remember to restore after
-
     cache_file = (
         cache_dir
         / f"{dataset}-{model_id.replace('/', '-')}-{_cache_key(dataset, model_id, max_rows, fe_model=fe_model, web_search=web_search)}.json"
@@ -542,7 +534,10 @@ def run_dataset_model(
     t0 = time.time()
     try:
         clf = PromptClassifier(
-            model=actual_model_id, verbose=False, web_search=web_search
+            model=actual_model_id,
+            verbose=False,
+            web_search=web_search,
+            vertex_location=vertex_region or None,
         )
         clf.fit(X_train, y_train, dataset_description=description or None)
         y_pred = clf.predict(X_test)
@@ -572,9 +567,6 @@ def run_dataset_model(
         cache_dir.mkdir(parents=True, exist_ok=True)
         with open(cache_file, "w") as f:
             json.dump(result, f, indent=2, default=str)
-
-    if _region_override is not None:
-        os.environ["VERTEXAI_LOCATION"] = _region_override
 
     return result
 
