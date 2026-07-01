@@ -30,6 +30,8 @@ import logging
 import os
 import sys
 import time
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -54,6 +56,14 @@ from sklearn.model_selection import train_test_split
 logger = logging.getLogger("promptlearn.progression")
 
 _MODEL_LOOKUP = {m["model_id"]: m for m in MODEL_PROGRESSION}
+
+
+_print_lock = threading.Lock()
+
+
+def _print(msg: str) -> None:
+    with _print_lock:
+        print(msg, flush=True)
 
 
 def run_dataset_model(
@@ -115,6 +125,8 @@ def run_dataset_model(
             os.environ["VERTEXAI_LOCATION"] = vertex_region
             _region_override = current
 
+    tag = f"[{dataset} × {model_id}]"
+
     safe_model_id = model_id.replace("/", "-")
     cache_file = (
         cache_dir
@@ -123,20 +135,18 @@ def run_dataset_model(
         else None
     )
     if cache_file and cache_file.exists() and not skip_cache_read:
-        logger.info("[%s × %s] cached", dataset, model_id)
+        _print(f"{tag} cached — skipping")
         with open(cache_file) as f:
             return json.load(f)
 
     openml_name, version = spec
-    logger.info("[%s × %s] loading dataset…", dataset, model_id)
+    _print(f"{tag} loading dataset…")
     X, y, class_map, description = load_dataset(openml_name, version, max_rows)
     n_classes = len(class_map)
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.25, random_state=42, stratify=y
     )
-    logger.info(
-        "[%s] %d rows, %d cols, %d classes", dataset, len(X), X.shape[1], n_classes
-    )
+    _print(f"{tag} {len(X)} rows  {X.shape[1]} cols  {n_classes} classes")
 
     result = {
         "dataset": dataset,
@@ -152,28 +162,21 @@ def run_dataset_model(
 
     # Optional feature engineering pass before the classifier.
     if fe_model:
+        _print(f"{tag} running AdaptiveFeatureEngineer ({fe_model})…")
         try:
             fe_step = AdaptiveFeatureEngineer(model=fe_model, verbose=False)
             X_train = fe_step.fit_transform(X_train, y_train)
             X_test = fe_step.transform(X_test)
             skip = getattr(fe_step, "skip_reason_", None)
             if skip:
-                logger.info("[%s] AdaptiveFE skipped (%s)", dataset, skip)
+                _print(f"{tag} AdaptiveFE skipped: {skip}")
             else:
-                logger.info(
-                    "[%s] AdaptiveFE (%s) produced %d cols (delta=%.3f)",
-                    dataset,
-                    fe_model,
-                    X_train.shape[1],
-                    getattr(fe_step, "probe_delta_", float("nan")),
+                _print(
+                    f"{tag} AdaptiveFE done — {X_train.shape[1]} cols  "
+                    f"delta={getattr(fe_step, 'probe_delta_', float('nan')):.3f}"
                 )
         except Exception as e:
-            logger.warning(
-                "[%s] AdaptiveFE (%s) failed, using original features: %s",
-                dataset,
-                fe_model,
-                e,
-            )
+            _print(f"{tag} AdaptiveFE FAILED: {e}  (using original features)")
 
     # ── promptlearn ───────────────────────────────────────────────────────────
     t0 = time.time()
@@ -181,7 +184,35 @@ def run_dataset_model(
         clf = PromptClassifier(
             model=actual_model_id, verbose=False, web_search=web_search
         )
+
+        # Patch _call_llm to print each LLM sub-step as it starts/finishes.
+        _call_count = [0]
+        _orig_call_llm = clf._call_llm  # bound method
+
+        def _instrumented_call_llm(prompt: str, web_search: bool = False) -> str:
+            _call_count[0] += 1
+            n = _call_count[0]
+            if "preparing a structured dataset summary" in prompt:
+                step = "context pre-pass"
+            elif "extend any such mappings" in prompt:
+                step = "extend pass"
+            elif n == 1:
+                step = "code generation"
+            else:
+                step = f"retry #{n - 1}"
+            ws_note = " [+web]" if web_search else ""
+            _print(f"{tag}   → {step}{ws_note}…")
+            result_text = _orig_call_llm(prompt, web_search=web_search)
+            _print(f"{tag}   ✓ {step} done  ({len(result_text):,} chars)")
+            return result_text
+
+        clf._call_llm = _instrumented_call_llm
+
+        _print(f"{tag} fitting…")
         clf.fit(X_train, y_train, dataset_description=description or None)
+        elapsed = time.time() - t0
+        _print(f"{tag} fit done  ({elapsed:.1f}s)  code={len(clf.raw_python_code_ or ''):,} chars")
+
         y_pred = clf.predict(X_test)
         y_proba = None
         if hasattr(clf, "predict_proba"):
@@ -192,17 +223,14 @@ def run_dataset_model(
         result["promptlearn"] = _rich_metrics(
             np.array(y_test), y_pred, y_proba, n_classes
         )
-        result["promptlearn"]["fit_time_s"] = round(time.time() - t0, 2)
+        result["promptlearn"]["fit_time_s"] = round(elapsed, 2)
         result["promptlearn"]["generated_code"] = clf.raw_python_code_
         result["promptlearn"]["fit_prompt"] = getattr(clf, "fit_prompt_", None)
-        logger.info(
-            "[%s × %s] promptlearn accuracy=%.3f",
-            dataset,
-            model_id,
-            result["promptlearn"]["accuracy"],
-        )
+        acc = result["promptlearn"]["accuracy"]
+        _print(f"{tag} accuracy={acc:.3f}  ✓")
     except Exception as e:
-        logger.warning("[%s × %s] promptlearn failed: %s", dataset, model_id, e)
+        elapsed = time.time() - t0
+        _print(f"{tag} FAILED after {elapsed:.1f}s: {e}")
         result["promptlearn"] = {"error": str(e)}
 
     # Only cache successful results — errors are not cached so re-running the
@@ -212,6 +240,7 @@ def run_dataset_model(
         cache_dir.mkdir(parents=True, exist_ok=True)
         with open(cache_file, "w") as f:
             json.dump(result, f, indent=2, default=str)
+        _print(f"{tag} cached → {cache_file.name}")
 
     if _region_override is not None:
         os.environ["VERTEXAI_LOCATION"] = _region_override
@@ -253,6 +282,12 @@ def main(argv=None):
         help="Ignore existing cache files and re-run, but still write results to cache.",
     )
     parser.add_argument(
+        "--workers",
+        type=int,
+        default=4,
+        help="Number of parallel dataset workers (default: 4). Each makes its own LLM calls.",
+    )
+    parser.add_argument(
         "--fe-model",
         default=None,
         metavar="MODEL_ID",
@@ -281,7 +316,11 @@ def main(argv=None):
             f"Use --list-models to see all options."
         )
 
-    logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(message)s")
+    # Route our own logger to stdout; suppress promptlearn's internal logger
+    # (key events are printed directly via _print instead).
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(logging.Formatter("[%(asctime)s] %(message)s"))
+    logging.basicConfig(handlers=[handler], level=logging.INFO)
     logging.getLogger("promptlearn").setLevel(logging.WARNING)
     logger.setLevel(logging.INFO)
 
@@ -310,40 +349,63 @@ def main(argv=None):
         flush=True,
     )
 
-    datasets_done = 0
-    for dataset in datasets_to_run:
-        spec = DEFAULT_DATASETS[dataset]
-        print(f"\n[{dataset} × {label}]", flush=True)
-        try:
-            r = run_dataset_model(
-                dataset,
-                spec,
-                args.llm,
-                args.max_rows,
-                cache_dir,
-                vertex_region=vertex_region,
-                fe_model=args.fe_model,
-                web_search=web_search,
-                base_model_id=base_model_id,
-                skip_cache_read=args.no_cache,
-            )
-            datasets_done += 1
-            pl = r.get("promptlearn", {})
-            pl_acc = pl.get("accuracy", float("nan"))
-            pl_err = pl.get("error")
-            status = f"accuracy={pl_acc:.3f}" if not pl_err else f"FAILED: {pl_err}"
-            print(
-                f"  promptlearn[{label}]  {dataset}  {status}  "
-                f"({datasets_done}/{len(datasets_to_run)} done)",
-                flush=True,
-            )
-        except Exception as e:
-            logger.warning("[%s × %s] failed: %s", dataset, args.llm, e)
+    n_total = len(datasets_to_run)
+    n_workers = min(args.workers, n_total)
+    _print(f"Parallelism: {n_workers} workers  ({n_total} datasets)")
 
-    print(
-        f"\nFinished: {datasets_done}/{len(datasets_to_run)} datasets completed for {label!r}.",
-        flush=True,
-    )
+    results = []
+    completed = [0]  # mutable for closure
+
+    def _run_one(dataset: str) -> dict:
+        spec = DEFAULT_DATASETS[dataset]
+        idx = datasets_to_run.index(dataset) + 1
+        _print(f"\n── {idx}/{n_total}: {dataset} starting ──")
+        return run_dataset_model(
+            dataset,
+            spec,
+            args.llm,
+            args.max_rows,
+            cache_dir,
+            vertex_region=vertex_region,
+            fe_model=args.fe_model,
+            web_search=web_search,
+            base_model_id=base_model_id,
+            skip_cache_read=args.no_cache,
+        )
+
+    with ThreadPoolExecutor(max_workers=n_workers) as pool:
+        futures = {pool.submit(_run_one, ds): ds for ds in datasets_to_run}
+        for future in as_completed(futures):
+            dataset = futures[future]
+            completed[0] += 1
+            try:
+                r = future.result()
+                results.append(r)
+                pl = r.get("promptlearn", {})
+                if pl.get("error"):
+                    _print(
+                        f"\n✗ {dataset} FAILED ({completed[0]}/{n_total} done): {pl['error']}"
+                    )
+                else:
+                    _print(
+                        f"\n✓ {dataset} accuracy={pl.get('accuracy', float('nan')):.3f}"
+                        f"  fit={pl.get('fit_time_s', '?')}s"
+                        f"  ({completed[0]}/{n_total} done)"
+                    )
+            except Exception as e:
+                _print(f"\n✗ {dataset} FATAL ({completed[0]}/{n_total} done): {e}")
+
+    succeeded = [r for r in results if not r.get("promptlearn", {}).get("error")]
+    failed = [r for r in results if r.get("promptlearn", {}).get("error")]
+    _print(f"\n{'─'*60}")
+    _print(f"Done: {len(succeeded)}/{n_total} succeeded  {len(failed)} failed  model={label!r}")
+    if succeeded:
+        accs = [r["promptlearn"]["accuracy"] for r in succeeded]
+        _print(f"Accuracy — mean={sum(accs)/len(accs):.3f}  min={min(accs):.3f}  max={max(accs):.3f}")
+    if failed:
+        _print("Failed datasets:")
+        for r in failed:
+            _print(f"  {r['dataset']}: {r['promptlearn']['error']}")
     return 0
 
 
