@@ -236,8 +236,7 @@ CSS = textwrap.dedent("""\
     .copy-btn:active { background: #ccc; }
 
     .prompt-box { background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 14px; font-family: "SF Mono","Fira Code",monospace; font-size: 0.76rem; line-height: 1.6; white-space: pre-wrap; word-break: break-word; max-height: 440px; overflow-y: auto; color: #2d2d2d; }
-    .web-preamble { background: #fffde7; border-left: 3px solid #f9a825; padding: 6px 10px; border-radius: 0 4px 4px 0; margin-bottom: 6px; font-style: italic; color: #5d4037; }
-    .prompt-section-label { color: #1565c0; font-weight: 700; }
+.prompt-section-label { color: #1565c0; font-weight: 700; }
 
     pre { margin: 0; border-radius: 8px; overflow: auto; max-height: 440px; border: 1px solid #e0e0e0; min-width: 0; width: 100%; }
     .detail-grid > div { min-width: 0; }
@@ -265,14 +264,9 @@ JS = textwrap.dedent("""\
     function renderPrompt(text) {
       if (!text) return "<span class='no-data'>not stored</span>";
       const lines = text.split("\\n");
-      let out = "", firstLine = true, emitted = false;
+      let out = "", emitted = false;
       for (const line of lines) {
         if (!emitted && line.trim() === "") continue;
-        if (firstLine && line.includes("search the web")) {
-          out += `<div class="web-preamble">${esc(line)}</div>`;
-          firstLine = false; emitted = true;
-          continue;
-        }
         firstLine = false; emitted = true;
         if (line === "__CONTEXT_START__")
           out += `<span class="prompt-section-label">── Dataset context ──</span>\\n`;
