@@ -83,6 +83,18 @@ class PromptClassifier(ClassifierMixin, BasePromptEstimator):
             return np.array(results, dtype=int)
         raise ValueError("X must be a DataFrame or ndarray.")
 
+    def _validate_predict_fn(self, predict_fn, rows, labels=[]):
+        super()._validate_predict_fn(predict_fn, rows, labels)
+        for row in rows:
+            result = predict_fn(**row)
+            if not isinstance(result, (int, np.integer)):
+                raise ValueError(
+                    f"predict() returned {result!r} ({type(result).__name__}) but must "
+                    f"return an int. Replace any string class names with their integer "
+                    f"codes — e.g. return a dict mapping like "
+                    f"{{'mammal': 0, 'bird': 1, ...}}[class_name] and return that integer."
+                )
+
     def score(self, X, y):
         y_pred = self.predict(X)
         y_true = np.array(y)

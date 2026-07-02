@@ -193,6 +193,8 @@ DEFAULT_DATASETS = {
     "soybean": ("soybean", 1),
     "hepatitis": ("hepatitis", 1),
     "lymph": ("lymph", 1),
+    "zoo": ("zoo", 1),
+    "heart-statlog": ("heart-statlog", 1),
 }
 
 
