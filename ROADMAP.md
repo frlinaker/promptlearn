@@ -116,3 +116,9 @@ Things worth exploring but not yet sequenced:
   the fit prompt (e.g. "this is medical data; treat feature X as a risk factor")
 - **Cross-lingual datasets** — do LLMs handle feature names in non-English languages?
   Tests whether world knowledge transfer is language-dependent
+- **Time series support** — promptlearn's stateless `predict(**features)` contract
+  is fundamentally row-independent and cannot model temporal dependencies. Supporting
+  time series would require a different code generation target (e.g.
+  `predict(history: list, horizon: int) -> list`) and a different evaluation
+  framework. Natural fit would be a `PromptForecaster` class alongside sktime/darts
+  conventions rather than sklearn's `predict(X)` interface.
