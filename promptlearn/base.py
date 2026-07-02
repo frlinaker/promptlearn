@@ -402,6 +402,11 @@ class BasePromptEstimator(BaseEstimator):
                 len(data), self.max_train_rows,
             )
             data = data.sample(self.max_train_rows, random_state=42)
+        else:
+            # Shuffle so that context-window truncation sees a representative
+            # class distribution rather than whatever ordering the source data uses
+            # (OpenML datasets are often sorted by class label).
+            data = data.sample(frac=1, random_state=42).reset_index(drop=True)
 
         # Context pre-pass: replace raw description with a clean, structured summary.
         if dataset_description and self.context_prepass:
