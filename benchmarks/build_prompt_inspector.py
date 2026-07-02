@@ -429,7 +429,34 @@ JS = textwrap.dedent("""\
 
     function copyId(id) {
       const el = document.getElementById(id);
-      navigator.clipboard.writeText(el.innerText || el.textContent).catch(() => {});
+      const text = el.innerText || el.textContent || "";
+      // Try modern clipboard API first (requires HTTPS or localhost)
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => flashBtn(id)).catch(() => legacyCopy(text, id));
+      } else {
+        legacyCopy(text, id);
+      }
+    }
+
+    function legacyCopy(text, id) {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.cssText = "position:fixed;top:0;left:0;opacity:0;";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try { document.execCommand("copy"); flashBtn(id); } catch(e) {}
+      document.body.removeChild(ta);
+    }
+
+    function flashBtn(id) {
+      // Find the copy button associated with this pane and briefly turn it green
+      const btn = document.querySelector(`[onclick*="'${id}'"]`);
+      if (!btn) return;
+      const orig = btn.textContent;
+      btn.textContent = "✓ copied";
+      btn.style.background = "#c8e6c9";
+      setTimeout(() => { btn.textContent = orig; btn.style.background = ""; }, 1200);
     }
 
     // Model filter chips
