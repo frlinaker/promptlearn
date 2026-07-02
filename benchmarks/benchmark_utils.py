@@ -197,7 +197,7 @@ DEFAULT_DATASETS = {
     "heart-statlog": ("heart-statlog", 1),
     "spotify-genre": (
         None, None,
-        Path(__file__).parent / "data" / "spotify_genre.csv",
+        Path(__file__).parent.parent / "examples" / "external_data" / "spotify_genre.csv",
         "genre",
         (
             "Spotify track genre classification. Each row is a unique track. "
