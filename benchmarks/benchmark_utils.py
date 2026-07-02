@@ -195,21 +195,28 @@ DEFAULT_DATASETS = {
     "lymph": ("lymph", 1),
     "zoo": ("zoo", 1),
     "heart-statlog": ("heart-statlog", 1),
+    "spotify-genre": (None, None, Path(__file__).parent / "data" / "spotify_genre.csv", "genre"),
 }
 
 
-def load_dataset(openml_name: str, version: int, max_rows: int):
-    bunch = fetch_openml(
-        name=openml_name, version=version, as_frame=True, parser="auto"
-    )
-    X = bunch.data.copy()
-    y = pd.Series(np.asarray(bunch.target)).astype(str)
+def load_dataset(openml_name, version, max_rows: int, csv_path=None, target_col=None):
+    if csv_path is not None:
+        df = pd.read_csv(csv_path)
+        y = df[target_col].astype(str)
+        X = df.drop(columns=[target_col])
+        description = ""
+    else:
+        bunch = fetch_openml(
+            name=openml_name, version=version, as_frame=True, parser="auto"
+        )
+        X = bunch.data.copy()
+        y = pd.Series(np.asarray(bunch.target)).astype(str)
+        description = getattr(bunch, "DESCR", None) or ""
     classes = {c: i for i, c in enumerate(sorted(y.unique()))}
     y = y.map(classes).astype(int)
     if max_rows and len(X) > max_rows:
         X = X.sample(max_rows, random_state=42)
         y = y.loc[X.index]
-    description = getattr(bunch, "DESCR", None) or ""
     return X.reset_index(drop=True), y.reset_index(drop=True), classes, description
 
 

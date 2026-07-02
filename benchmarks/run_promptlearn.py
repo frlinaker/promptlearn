@@ -131,9 +131,10 @@ def run_dataset_model(
         with open(cache_file) as f:
             return json.load(f)
 
-    openml_name, version = spec
+    openml_name, version = spec[0], spec[1]
+    csv_path, target_col = (spec[2], spec[3]) if len(spec) > 2 else (None, None)
     _print(f"{tag} loading dataset…")
-    X, y, class_map, description = load_dataset(openml_name, version, max_rows)
+    X, y, class_map, description = load_dataset(openml_name, version, max_rows, csv_path=csv_path, target_col=target_col)
     n_classes = len(class_map)
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.25, random_state=42, stratify=y
