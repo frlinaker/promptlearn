@@ -10,9 +10,26 @@ Released versions are documented in [CHANGELOG.md](CHANGELOG.md).
 
 promptlearn's accuracy is a **direct function of LLM capability** — it improves
 for free every time a new model ships, with no code changes. The benchmark already
-shows this: 54% (GPT-4o, May 2024) → 84% (GPT-5.5/Gemini 3.5 Flash, mid-2026),
+shows this: 54% (GPT-4o, May 2024) → 86% (GPT-5.5/Gemini 2.5 Flash, mid-2026),
 closing in on XGBoost (92%) and TabPFN (94%). The roadmap below is organised
 around amplifying that property.
+
+---
+
+## Shipped since v0.5.0 (unreleased)
+
+- **Dataset context pre-pass**: `fit()` now accepts `dataset_description` and
+  runs a pre-pass to generate a clean description + column decoder before the
+  main code-generation prompt (`context` block injected above instructions)
+- **Web search at fit time**: `web_search=True` on `fit()` enables real-time
+  retrieval for GPT-5+ (OpenAI Responses API) and Gemini Vertex AI (grounding)
+- **Prompt section markers**: centralized in `prompt_markers.py`; prompt assembly
+  is now deterministic and inspectable
+- **Prompt inspector**: HTML benchmark report with expandable per-model detail
+  panels showing fit prompt, generated code, and per-stage timing
+- **Benchmark extended**: TabPFN added as baseline; 13 datasets; web-search
+  variants tracked separately; model-progression chart auto-sorts legend by
+  accuracy; per-dataset timeline chart cleaned up
 
 ---
 
