@@ -25,9 +25,15 @@ logger = logging.getLogger("promptlearn")
 # PROMPTLEARN_MODEL environment variable is unset.
 DEFAULT_MODEL = "gpt-5.5"
 
-# Fraction of the model's max_input_tokens budget reserved for the prompt.
-# The remainder covers generated code output and any retry echoes.
-_CONTEXT_HEADROOM = 0.80
+# Fraction of the model's max_input_tokens budget used for the prompt.
+# Start high to maximise training rows; shrink by this step each time the
+# model signals finish_reason="length" (output was cut off mid-generation).
+_CONTEXT_HEADROOM = 0.92
+_CONTEXT_HEADROOM_STEP = 0.05
+
+
+class _OutputTruncated(Exception):
+    """Raised when the LLM signals finish_reason='length' (output cut off)."""
 
 
 def resolve_model(model: Optional[str]) -> str:
@@ -188,10 +194,20 @@ class BasePromptEstimator(BaseEstimator):
                 messages=[{"role": "user", "content": prompt}],
                 **kwargs,
             )
-            content = str(response.choices[0].message.content).strip()
+            choice = response.choices[0]
+            content = str(choice.message.content).strip()
+            finish_reason = getattr(choice, "finish_reason", None)
             if self.verbose:
-                logger.info("[LLM Response]\n%s", content)
+                logger.info("[LLM Response (finish_reason=%s)]\n%s", finish_reason, content)
+            if finish_reason == "length":
+                logger.warning(
+                    "LLM output was truncated (finish_reason='length') — "
+                    "response may be incomplete."
+                )
+                raise _OutputTruncated(content)
             return content
+        except _OutputTruncated:
+            raise
         except Exception as e:
             logger.error("LLM call failed: %s", e)
             raise RuntimeError(f"LLM call failed: {e}")
@@ -303,7 +319,7 @@ class BasePromptEstimator(BaseEstimator):
 
         return prompt
 
-    def _truncate_to_context_window(self, df, prompt_template: str) -> "pd.DataFrame":
+    def _truncate_to_context_window(self, df, prompt_template: str, headroom: float = _CONTEXT_HEADROOM) -> "pd.DataFrame":
         """Return df truncated so the full prompt fits within the model's context window.
 
         Builds the prompt with all rows, counts tokens, and removes rows from the
@@ -326,7 +342,7 @@ class BasePromptEstimator(BaseEstimator):
             )
             return df
 
-        budget = int(max_input * _CONTEXT_HEADROOM)
+        budget = int(max_input * headroom)
 
         csv = df.to_csv(index=False)
         full_prompt = prompt_template.replace("{data}", csv)
@@ -404,27 +420,43 @@ class BasePromptEstimator(BaseEstimator):
         prompt_template = self._build_prompt_without_data(
             prompt, synthetic_features, context_block
         )
-        sample_df = self._truncate_to_context_window(data, prompt_template)
 
-        base_prompt = prompt_template.replace("{data}", sample_df.to_csv(index=False))
+        headroom = _CONTEXT_HEADROOM
+        while True:
+            sample_df = self._truncate_to_context_window(data, prompt_template, headroom=headroom)
+            base_prompt = prompt_template.replace("{data}", sample_df.to_csv(index=False))
 
-        self.fit_prompt_ = base_prompt
-        logger.info(f"[LLM Prompt]\n{base_prompt}")
+            self.fit_prompt_ = base_prompt
+            logger.info(f"[LLM Prompt]\n{base_prompt}")
 
-        validation_rows = (
-            list(
-                generate_feature_dicts(
-                    sample_df[self.feature_names_], self.feature_names_
+            validation_rows = (
+                list(
+                    generate_feature_dicts(
+                        sample_df[self.feature_names_], self.feature_names_
+                    )
                 )
+                if self.feature_names_
+                else []
             )
-            if self.feature_names_
-            else []
-        )
-        validation_labels = list(sample_df[self.target_name_]) if self.target_name_ else []
+            validation_labels = list(sample_df[self.target_name_]) if self.target_name_ else []
 
-        raw_code, extended_code, predict_fn = self._generate_code(
-            base_prompt, validation_rows, validation_labels, web_search=self.web_search
-        )
+            try:
+                raw_code, extended_code, predict_fn = self._generate_code(
+                    base_prompt, validation_rows, validation_labels, web_search=self.web_search
+                )
+                break
+            except _OutputTruncated:
+                new_headroom = headroom - _CONTEXT_HEADROOM_STEP
+                if new_headroom < 0.50:
+                    raise RuntimeError(
+                        f"LLM output was truncated even at {headroom:.0%} context headroom "
+                        f"(floor is 50%). The prompt is too large for this model."
+                    )
+                logger.warning(
+                    "Output truncated at headroom=%.0f%% — shrinking to %.0f%% and retrying.",
+                    headroom * 100, new_headroom * 100,
+                )
+                headroom = new_headroom
         self.raw_python_code_ = raw_code
         self.python_code_ = extended_code
         self.predict_fn = predict_fn
@@ -446,6 +478,7 @@ class BasePromptEstimator(BaseEstimator):
         # One initial attempt plus up to max_retries corrective re-tries.
         for attempt in range(self.max_retries + 1):
             # Web search only on the first attempt; retries don't need it.
+            # _OutputTruncated propagates immediately to _fit for data reduction.
             code = self._call_llm(
                 base_prompt + feedback, web_search=web_search and attempt == 0
             )

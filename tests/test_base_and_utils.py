@@ -90,7 +90,7 @@ def test_truncate_warns_and_reduces(monkeypatch):
     monkeypatch.setattr(
         litellm, "get_model_info", lambda m: {"max_input_tokens": 1000}
     )
-    # First call (full df) exceeds budget; each subsequent call with ≤25 rows fits.
+    # First call (full df) exceeds budget (>920 = 1000*0.92); ≤25 rows fits.
     call_count = [0]
 
     def fake_counter(**kw):
@@ -98,7 +98,7 @@ def test_truncate_warns_and_reduces(monkeypatch):
         content = kw["messages"][0]["content"]
         # Proxy for row count: count newlines in the content after the header
         rows_in_csv = content.count("\n") - 1  # subtract header row
-        return 900 if rows_in_csv > 25 else 500
+        return 950 if rows_in_csv > 25 else 500
 
     monkeypatch.setattr(litellm, "token_counter", fake_counter)
 
