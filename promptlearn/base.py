@@ -327,6 +327,38 @@ class BasePromptEstimator(BaseEstimator):
 
         return prompt
 
+    def _count_tokens(self, prompt: str) -> int:
+        """Count tokens for the given prompt string using the most accurate method available.
+
+        For Gemini/Vertex AI models, calls Google's countTokens API which uses the
+        exact same tokenizer as inference. For all other models, falls back to
+        litellm.token_counter (tiktoken-based).
+        """
+        import litellm
+
+        messages = [{"role": "user", "content": prompt}]
+
+        # Gemini models: use Google's exact countTokens API (free, same tokenizer as inference).
+        # litellm.token_counter falls back to tiktoken for Gemini which is ~20-30% off.
+        if "gemini" in self.model.lower():
+            try:
+                import os
+                from google import genai
+
+                project = os.environ.get("VERTEXAI_PROJECT") or os.environ.get("GOOGLE_CLOUD_PROJECT")
+                location = self.vertex_location or os.environ.get("VERTEXAI_LOCATION") or "us-central1"
+                # Extract bare model name (strip "vertex_ai/" prefix if present)
+                model_name = self.model.split("/")[-1].replace("+web", "")
+                client = genai.Client(vertexai=True, project=project, location=location)
+                resp = client.models.count_tokens(model=model_name, contents=prompt)
+                return resp.total_tokens
+            except Exception as e:
+                logger.warning(
+                    "Google countTokens API failed (%s) — falling back to litellm.token_counter.", e
+                )
+
+        return litellm.token_counter(model=self.model, messages=messages)
+
     def _truncate_to_context_window(self, df, prompt_template: str, headroom: float = _CONTEXT_HEADROOM) -> "pd.DataFrame":
         """Return df truncated so the full prompt fits within the model's context window.
 
@@ -354,25 +386,35 @@ class BasePromptEstimator(BaseEstimator):
 
         csv = df.to_csv(index=False)
         full_prompt = prompt_template.replace("{data}", csv)
-        n_tokens = litellm.token_counter(
-            model=self.model,
-            messages=[{"role": "user", "content": full_prompt}],
-        )
+        n_tokens = self._count_tokens(full_prompt)
 
         if n_tokens <= budget:
             return df
 
-        # Binary-search for the largest row count that fits.
+        # Estimate target row count linearly then do at most one binary-search
+        # correction, using _count_tokens throughout for accuracy.
         original_rows = len(df)
-        lo, hi = 1, original_rows
+        # Linear estimate: scale rows proportionally to budget/n_tokens ratio.
+        estimated_rows = int(original_rows * budget / n_tokens)
+        # Binary-search from there to find the exact largest row count that fits.
+        lo, hi = max(1, estimated_rows - 500), min(original_rows, estimated_rows + 500)
+        # Expand bounds if estimate was off.
+        while lo > 1:
+            csv = df.iloc[:lo].to_csv(index=False)
+            if self._count_tokens(prompt_template.replace("{data}", csv)) <= budget:
+                break
+            lo = max(1, lo - 500)
+            hi = lo + 500
+        while hi < original_rows:
+            csv = df.iloc[:hi].to_csv(index=False)
+            if self._count_tokens(prompt_template.replace("{data}", csv)) > budget:
+                break
+            hi = min(original_rows, hi + 500)
+
         while lo < hi:
             mid = (lo + hi + 1) // 2
             csv = df.iloc[:mid].to_csv(index=False)
-            prompt = prompt_template.replace("{data}", csv)
-            if litellm.token_counter(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-            ) <= budget:
+            if self._count_tokens(prompt_template.replace("{data}", csv)) <= budget:
                 lo = mid
             else:
                 hi = mid - 1
@@ -380,7 +422,7 @@ class BasePromptEstimator(BaseEstimator):
         kept = lo
         warnings.warn(
             f"Training data ({original_rows:,} rows, ~{n_tokens:,} tokens) exceeds "
-            f"{_CONTEXT_HEADROOM:.0%} of {self.model!r} context window "
+            f"{headroom:.0%} of {self.model!r} context window "
             f"({max_input:,} tokens). Truncating to {kept:,} rows.",
             UserWarning,
             stacklevel=4,
