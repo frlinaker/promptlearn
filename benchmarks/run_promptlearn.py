@@ -70,7 +70,7 @@ def run_dataset_model(
     dataset: str,
     spec: tuple,
     model_id: str,
-    max_rows: int,
+    max_rows: int | None,
     cache_dir: Path | None,
     vertex_region: str | None = None,
     fe_model: str | None = None,
@@ -285,7 +285,8 @@ def main(argv=None):
         default=list(DEFAULT_DATASETS),
         help="Dataset keys to run (default: full suite).",
     )
-    parser.add_argument("--max-rows", type=int, default=2000)
+    parser.add_argument("--max-rows", type=int, default=None,
+                        help="Cap dataset rows before split (default: no cap — use full dataset).")
     parser.add_argument(
         "--output-dir",
         default="benchmarks/progression_results",

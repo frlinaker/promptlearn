@@ -56,7 +56,7 @@ ALL_LEARNERS = ["logreg", "xgboost", "tabpfn"]
 def run_dataset_baselines(
     dataset: str,
     spec: tuple,
-    max_rows: int,
+    max_rows: int | None,
     cache_dir: Path | None,
     learners: list[str] | None = None,
     skip_cache_read: bool = False,
@@ -341,7 +341,8 @@ def main(argv=None):
         metavar="LEARNER",
         help=f"Baseline learners to run. Choices: {ALL_LEARNERS} (default: all).",
     )
-    parser.add_argument("--max-rows", type=int, default=2000)
+    parser.add_argument("--max-rows", type=int, default=None,
+                        help="Cap dataset rows before split (default: no cap — use full dataset).")
     parser.add_argument(
         "--output-dir",
         default="benchmarks/progression_results",

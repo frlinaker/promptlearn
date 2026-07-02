@@ -218,7 +218,7 @@ DEFAULT_DATASETS = {
 }
 
 
-def load_dataset(openml_name, version, max_rows: int, csv_path=None, target_col=None, description=None, require_description=True):
+def load_dataset(openml_name, version, max_rows: int | None, csv_path=None, target_col=None, description=None, require_description=True):
     if csv_path is not None:
         df = pd.read_csv(csv_path)
         y = df[target_col].astype(str)
@@ -278,7 +278,7 @@ def _rich_metrics(
 def _cache_key(
     dataset: str,
     model_id: str,
-    max_rows: int,
+    max_rows: int | None,
     fe_model: str | None = None,
     web_search: bool = False,
 ) -> str:
@@ -286,7 +286,7 @@ def _cache_key(
     return hashlib.sha1(raw.encode()).hexdigest()[:16]
 
 
-def _baseline_cache_key(dataset: str, max_rows: int) -> str:
+def _baseline_cache_key(dataset: str, max_rows: int | None) -> str:
     raw = f"{CACHE_SCHEMA}|baselines|{dataset}|{max_rows}"
     return hashlib.sha1(raw.encode()).hexdigest()[:16]
 
