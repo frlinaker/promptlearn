@@ -208,6 +208,14 @@ class BasePromptEstimator(BaseEstimator):
             return content
         except _OutputTruncated:
             raise
+        except litellm.ContextWindowExceededError as e:
+            # Local token counter undercounted (common with Gemini). Let _fit
+            # shrink the dataset and retry rather than failing hard.
+            logger.warning(
+                "Context window exceeded at API level (local token count was inaccurate) — "
+                "will reduce dataset and retry. Error: %s", e
+            )
+            raise _OutputTruncated("")
         except Exception as e:
             logger.error("LLM call failed: %s", e)
             raise RuntimeError(f"LLM call failed: {e}")
