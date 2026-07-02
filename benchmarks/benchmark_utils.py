@@ -603,7 +603,7 @@ def plot_progression(df: pd.DataFrame, output_dir: Path):
             only_move={"text": "xy", "points": "xy"},
         )
     ax.set_xlabel("Model release date", fontsize=12)
-    ax.set_ylabel(f"Mean accuracy ({n_datasets} OpenML datasets)", fontsize=12)
+    ax.set_ylabel(f"Mean accuracy ({n_datasets} datasets)", fontsize=12)
     ax.set_title(
         "promptlearn accuracy grows with LLM evolution\n"
         "Classical ML baselines shown as dashed horizontals",
