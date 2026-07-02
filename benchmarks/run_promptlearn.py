@@ -77,6 +77,7 @@ def run_dataset_model(
     web_search: bool = False,
     base_model_id: str | None = None,
     skip_cache_read: bool = False,
+    skip_context: bool = False,
 ) -> dict:
     """Run promptlearn on one (dataset, model) cell.
 
@@ -132,9 +133,15 @@ def run_dataset_model(
             return json.load(f)
 
     openml_name, version = spec[0], spec[1]
-    csv_path, target_col = (spec[2], spec[3]) if len(spec) > 2 else (None, None)
+    csv_path = spec[2] if len(spec) > 2 else None
+    target_col = spec[3] if len(spec) > 3 else None
+    spec_description = spec[4] if len(spec) > 4 else None
     _print(f"{tag} loading dataset…")
-    X, y, class_map, description = load_dataset(openml_name, version, max_rows, csv_path=csv_path, target_col=target_col)
+    X, y, class_map, description = load_dataset(
+        openml_name, version, max_rows,
+        csv_path=csv_path, target_col=target_col, description=spec_description,
+        require_description=not skip_context,
+    )
     n_classes = len(class_map)
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.25, random_state=42, stratify=y
@@ -179,6 +186,7 @@ def run_dataset_model(
             verbose=False,
             web_search=web_search,
             vertex_location=vertex_region or None,
+            context_prepass=not skip_context,
         )
 
         # Patch _call_llm to print each LLM sub-step and accumulate per-stage timing.
@@ -295,6 +303,15 @@ def main(argv=None):
         help="Number of parallel dataset workers (default: 4). Each makes its own LLM calls.",
     )
     parser.add_argument(
+        "--skip-context",
+        action="store_true",
+        help=(
+            "Disable the dataset context pre-pass. "
+            "WARNING: this produces lower-quality results and should only be used "
+            "for debugging. Datasets with no description will fail without this flag."
+        ),
+    )
+    parser.add_argument(
         "--fe-model",
         default=None,
         metavar="MODEL_ID",
@@ -378,6 +395,7 @@ def main(argv=None):
             web_search=web_search,
             base_model_id=base_model_id,
             skip_cache_read=args.no_cache,
+            skip_context=args.skip_context,
         )
 
     with ThreadPoolExecutor(max_workers=n_workers) as pool:

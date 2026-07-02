@@ -195,29 +195,54 @@ DEFAULT_DATASETS = {
     "lymph": ("lymph", 1),
     "zoo": ("zoo", 1),
     "heart-statlog": ("heart-statlog", 1),
-    "spotify-genre": (None, None, Path(__file__).parent / "data" / "spotify_genre.csv", "genre"),
+    "spotify-genre": (
+        None, None,
+        Path(__file__).parent / "data" / "spotify_genre.csv",
+        "genre",
+        (
+            "Spotify track genre classification. Each row is a unique track. "
+            "Target is the playlist genre: edm, latin, pop, r&b, rap, rock. "
+            "Features include track_name and track_artist (text identifiers useful "
+            "for world-knowledge lookup), track_popularity (0-100 Spotify score), "
+            "and audio features: danceability (0-1, rhythmic suitability for dancing), "
+            "energy (0-1, intensity/activity), key (musical key 0-11), "
+            "loudness (dB, typically -60 to 0), mode (1=major, 0=minor), "
+            "speechiness (0-1, presence of spoken words), "
+            "acousticness (0-1, confidence track is acoustic), "
+            "instrumentalness (0-1, predicts no vocals), "
+            "liveness (0-1, presence of live audience), "
+            "valence (0-1, musical positiveness), tempo (BPM), "
+            "duration_ms (track length in milliseconds)."
+        ),
+    ),
 }
 
 
-def load_dataset(openml_name, version, max_rows: int, csv_path=None, target_col=None):
+def load_dataset(openml_name, version, max_rows: int, csv_path=None, target_col=None, description=None, require_description=True):
     if csv_path is not None:
         df = pd.read_csv(csv_path)
         y = df[target_col].astype(str)
         X = df.drop(columns=[target_col])
-        description = ""
+        resolved_description = description or ""
     else:
         bunch = fetch_openml(
             name=openml_name, version=version, as_frame=True, parser="auto"
         )
         X = bunch.data.copy()
         y = pd.Series(np.asarray(bunch.target)).astype(str)
-        description = getattr(bunch, "DESCR", None) or ""
+        resolved_description = description or getattr(bunch, "DESCR", None) or ""
+    if require_description and not resolved_description:
+        raise ValueError(
+            f"Dataset has no description — the context pre-pass cannot run. "
+            f"Add a description string to the DEFAULT_DATASETS entry, "
+            f"or pass --skip-context to explicitly disable the pre-pass."
+        )
     classes = {c: i for i, c in enumerate(sorted(y.unique()))}
     y = y.map(classes).astype(int)
     if max_rows and len(X) > max_rows:
         X = X.sample(max_rows, random_state=42)
         y = y.loc[X.index]
-    return X.reset_index(drop=True), y.reset_index(drop=True), classes, description
+    return X.reset_index(drop=True), y.reset_index(drop=True), classes, resolved_description
 
 
 def _rich_metrics(

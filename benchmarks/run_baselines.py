@@ -117,9 +117,14 @@ def run_dataset_baselines(
         result = {}
 
     openml_name, version = spec[0], spec[1]
-    csv_path, target_col = (spec[2], spec[3]) if len(spec) > 2 else (None, None)
+    csv_path = spec[2] if len(spec) > 2 else None
+    target_col = spec[3] if len(spec) > 3 else None
+    spec_description = spec[4] if len(spec) > 4 else None
     logger.info("[%s] loading dataset for baselines…", dataset)
-    X, y, class_map, _ = load_dataset(openml_name, version, max_rows, csv_path=csv_path, target_col=target_col)
+    X, y, class_map, _ = load_dataset(
+        openml_name, version, max_rows,
+        csv_path=csv_path, target_col=target_col, description=spec_description,
+    )
     n_classes = len(class_map)
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.25, random_state=42, stratify=y
