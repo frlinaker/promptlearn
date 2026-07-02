@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+import time
 import warnings
 
 from typing import Callable, Optional
@@ -216,6 +217,10 @@ class BasePromptEstimator(BaseEstimator):
                 "will reduce dataset and retry. Error: %s", e
             )
             raise _OutputTruncated("")
+        except litellm.RateLimitError as e:
+            logger.warning("Rate limit hit — sleeping 60s before re-raising. Error: %s", e)
+            time.sleep(60)
+            raise RuntimeError(f"LLM call failed: {e}")
         except Exception as e:
             logger.error("LLM call failed: %s", e)
             raise RuntimeError(f"LLM call failed: {e}")
@@ -242,16 +247,15 @@ class BasePromptEstimator(BaseEstimator):
         """
         import pandas as pd
 
-        # Build a value-summary: unique values per column, capped to keep prompt short
+        # Build a value-summary: all unique values per column
         value_lines = []
         for col in feature_names:
             uniq = sample_df[col].dropna().unique()
-            preview = sorted(str(v) for v in uniq[:20])
-            suffix = ", ..." if len(uniq) > 20 else ""
-            value_lines.append(f"  {col}: {', '.join(preview)}{suffix}")
+            preview = sorted(str(v) for v in uniq)
+            value_lines.append(f"  {col}: {', '.join(preview)}")
         value_summary = "\n".join(value_lines)
 
-        target_uniq = sorted(str(v) for v in sample_df[target_name].dropna().unique()[:20])
+        target_uniq = sorted(str(v) for v in sample_df[target_name].dropna().unique())
 
         prompt = (
             "You are preparing a structured dataset summary that will be embedded in a "
@@ -560,6 +564,8 @@ class BasePromptEstimator(BaseEstimator):
                     f"with this error:\n{e}\n\n"
                     "Fix the problem and return only the corrected, valid Python code."
                 )
+                if attempt < self.max_retries:
+                    time.sleep(5)
                 continue
 
             return raw_code, extended_code, fn

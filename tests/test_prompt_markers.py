@@ -159,25 +159,26 @@ def test_prepass_prompt_forbids_fences(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_prepass_value_summary_caps_at_20(monkeypatch):
-    """Columns with >20 unique values get capped with ', ...' in the pre-pass prompt."""
+def test_prepass_value_summary_shows_all_values(monkeypatch):
+    """All unique values per column appear in the pre-pass prompt — no cap."""
     clf = PromptClassifier(model="gpt-5.4-mini", verbose=False, context_prepass=True)
-    # Returns a function that covers both classes so coverage check passes
     monkeypatch.setattr(
         clf, "_call_llm",
         lambda p, web_search=False: "def predict(**f): return int(int(f.get('val', 0)) > 14)"
     )
 
-    # 30 unique values in 'code', 30 in 'val'; alternating target classes
+    # 30 unique values in each column
     X = pd.DataFrame({"code": [str(i) for i in range(30)], "val": range(30)})
     y = pd.Series([i % 2 for i in range(30)])
     clf.fit(X, y, dataset_description="Some dataset.")
 
-    assert ", ..." in clf.context_prepass_prompt_
+    # All 30 values present, no ellipsis
+    assert ", ..." not in clf.context_prepass_prompt_
+    assert "29" in clf.context_prepass_prompt_
 
 
-def test_prepass_value_summary_no_ellipsis_when_under_20(monkeypatch):
-    """Columns with ≤20 unique values do not get the ', ...' suffix."""
+def test_prepass_value_summary_no_ellipsis_when_few_values(monkeypatch):
+    """Columns with few unique values appear without truncation."""
     clf = PromptClassifier(model="gpt-5.4-mini", verbose=False, context_prepass=True)
     monkeypatch.setattr(clf, "_call_llm", lambda p, web_search=False: SIMPLE_CODE)
 
@@ -185,7 +186,6 @@ def test_prepass_value_summary_no_ellipsis_when_under_20(monkeypatch):
     y = pd.Series([0, 1, 0, 1, 0])
     clf.fit(X, y, dataset_description="Some dataset.")
 
-    # The code column has only 5 unique values — no ellipsis for it
     prompt = clf.context_prepass_prompt_
     code_line = [l for l in prompt.splitlines() if "code:" in l]
     assert code_line, "Expected a 'code:' line in value summary"

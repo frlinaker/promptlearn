@@ -56,11 +56,10 @@ def test_sanitize_description_removes_braces():
     assert "context" in result and "data" in result and "here" in result
 
 
-def test_sanitize_description_truncates():
+def test_sanitize_description_no_length_cap():
     long = "x" * 600
     result = sanitize_dataset_description(long)
-    assert len(result) <= 512  # 500 chars + " [truncated]" (12 chars)
-    assert result.endswith("[truncated]")
+    assert len(result) == 600  # no truncation — context window handles sizing
 
 
 def test_sanitize_description_collapses_whitespace():

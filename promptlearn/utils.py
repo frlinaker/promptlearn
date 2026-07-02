@@ -37,22 +37,16 @@ def generate_feature_dicts(X, feature_names):
         raise ValueError("X must be a DataFrame or ndarray.")
 
 
-_MAX_DESCRIPTION_CHARS = 500
-
-
 def sanitize_dataset_description(text: str) -> str:
     """Clean user-supplied dataset description before embedding it in an LLM prompt.
 
     Strips leading/trailing whitespace, removes curly braces (which would break
-    prompt template substitution), collapses internal whitespace runs, and truncates
-    to _MAX_DESCRIPTION_CHARS with a notice so the prompt structure stays intact.
+    prompt template substitution), and collapses internal whitespace runs.
     Prompt injection cannot be fully prevented, but we avoid making it worse.
     """
     text = text.strip()
     text = text.replace("{", "").replace("}", "")
     text = re.sub(r"[ \t]+", " ", text)
-    if len(text) > _MAX_DESCRIPTION_CHARS:
-        text = text[:_MAX_DESCRIPTION_CHARS].rstrip() + " [truncated]"
     return text
 
 
